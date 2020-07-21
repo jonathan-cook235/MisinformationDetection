@@ -3,7 +3,7 @@ Combining Temporal Graph Attention Networks and Hawkes Processes to model the di
 
 We use the twitter15/16 datasets (Ma et. al) as is the standard for assessing the performance of many state of the art misinformation detection models.
 
-Within the 'data' directory is the 'rumour_detection_acl2017' directory, which contains the datasets. Data preparation is performed within the files utils.py, text_preprocessing.py and dataset.py. These codes were built by the authors of 'Fake News Detection Using Machine Learning on Graphs'.
+Data preparation is performed within the files utils.py, text_preprocessing.py and dataset.py. These codes were built by the authors of 'Fake News Detection Using Machine Learning on Graphs'.
 
 The file 'graphs.py' constructs the dynamic graph that encapsulates the temporal and geometric propagation of misinformation via social media interactions. It is an extension of the codes also written by the authors of 'Fake News Detection Using Machine Learning on Graphs'.
 
