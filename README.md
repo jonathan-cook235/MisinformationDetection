@@ -11,4 +11,4 @@ The file 'graphs.py' constructs the dynamic graph that encapsulates the temporal
 
 'veracity_prediction.py' performs graph learning on the final state of the dynamic graph to make a prediction on the veracity of the source claim. This method is from the paper 'GCAN: Graph Aware Co-Attention Networks for Explainable Fake News Detection on Social Media'.
 
-The files 'Week # Model Implementation' provide code breakdowns for my supervisory research partner Qiang Zhang (UCL Centre for Artificial Intelligence).
+The files 'Week # Model Implementation.ipynb' provide code breakdowns for my supervisory research partner Qiang Zhang (UCL Centre for Artificial Intelligence).
