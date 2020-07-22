@@ -1,7 +1,7 @@
 # MisinformationDetection
 Combining Temporal Graph Attention Networks and Hawkes Processes to model the dissemination of misinformation via social media as a time-series event propagation.
 
-We use the twitter15/16 datasets (Ma et. al) as is the standard for assessing the performance of many state of the art misinformation detection models.
+We use the twitter15/16 datasets (Ma et. al) as is the standard for assessing the performance of many state of the art misinformation detection models. These along with the extra crawled twitter features can be found in the rumor_detection_acl2017 directory here: https://drive.google.com/drive/u/0/folders/1x1aywVkcoArlKiZjLN_If_YcspAI39Np
 
 Data preparation is performed within the files utils.py, text_preprocessing.py and dataset.py. These codes were built by the authors of 'Fake News Detection Using Machine Learning on Graphs'.
 
