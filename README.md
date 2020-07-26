@@ -7,7 +7,7 @@ Data preparation is performed within the files utils.py, text_preprocessing.py a
 
 The file 'graphs.py' constructs the dynamic graph that encapsulates the temporal and geometric propagation of misinformation via social media interactions. It is an extension of the codes also written by the authors of 'Fake News Detection Using Machine Learning on Graphs'.
 
-'veracity_model combines the encoder and decoder. A temporal graph sum constructs the encoder, creating a set of node embeddings. This method is from the paper 'Temporal Graph Networks for Deep Learning on Dynamic Graphs'. The veracity prediction task requires performing graph learning on the final state of the dynamic graph to make a prediction on the veracity of the source claim. This method is from the paper 'GCAN: Graph Aware Co-Attention Networks for Explainable Fake News Detection on Social Media'.
+'veracity_model.py' combines the encoder and decoder. A temporal graph sum constructs the encoder, creating a set of node embeddings. This method is from the paper 'Temporal Graph Networks for Deep Learning on Dynamic Graphs'. The veracity prediction task requires performing graph learning on the final state of the dynamic graph to make a prediction on the veracity of the source claim. This method is from the paper 'GCAN: Graph Aware Co-Attention Networks for Explainable Fake News Detection on Social Media'.
 
 'encoder-decoder.py' more formally constructs an encoder-decoder architecture of the veracity_model. This architecture is explained here: https://nlp.seas.harvard.edu/2018/04/03/attention.html
 
