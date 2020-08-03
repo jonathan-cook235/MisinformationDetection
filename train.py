@@ -11,6 +11,7 @@ from dataset import DatasetBuilder
 import numpy as np
 import csv
 
+
 def train(dataset, args):
 
     on_gpu = torch.cuda.is_available()
