@@ -58,7 +58,7 @@ class TGS(nn.Module):
         x_final, edge_index_final, batch_final = data[-1].x, data[-1].edge_index, data[-1].batch
         batch_final = batch_final.to(x_final.device)
         
-        h = np.zeros_like(data)
+        h = np.zeros_like(x_final)
         h_tilde = np.zeros_like(h)
         np.delete(h_tilde, 0)
         h[0] = x_final
