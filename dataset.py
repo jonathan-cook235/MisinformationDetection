@@ -383,6 +383,7 @@ class DatasetBuilder:
         user_ids_in_train = set()
         tweet_ids_in_train = set()
         for tree_file_name in trees_to_parse:
+            # print(tree_file_name)
             news_id = utils.get_root_id(tree_file_name)
             if news_id in train_ids:
                 with open(tree_file_name, "rt") as tree_file:

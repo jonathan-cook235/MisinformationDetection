@@ -224,7 +224,7 @@ if __name__ == "__main__":
                     help='dropout for TGS_stack')
     parser.add_argument('--model_type', default="GAT",
                     help='Model type for TGS_stack')
-    parser.add_argument('--batch_size', default=32, type=int,
+    parser.add_argument('--batch_size', default=4, type=int,
                     help='Batch_size')
     parser.add_argument('--only_binary', action='store_true',
                     help='Reduces the problem to binary classification')
