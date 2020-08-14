@@ -41,7 +41,7 @@ class TGS(nn.Module):
 
         """
         super(TGS, self).__init__()
-        self.neighbor_finder = NeighborFinder
+        self.neighbor_finder = NeighborFinder()
         self.memory = None
         self.embedding_module = get_embedding_module
         

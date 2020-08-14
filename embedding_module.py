@@ -104,7 +104,8 @@ class GraphEmbedding(EmbeddingModule):
       return source_node_features
     else:
 
-      neighbors, edge_idxs, edge_times = self.neighbor_finder.get_temporal_neighbor(source_nodes, timestamps, n_neighbors)
+      neighbors, edge_idxs, edge_times = self.neighbor_finder.get_temporal_neighbor\
+          (source_nodes=source_nodes, timestamps=timestamps, n_neighbors=n_neighbors)
 
       neighbors_torch = torch.from_numpy(neighbors).long().to(self.device)
 

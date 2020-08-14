@@ -83,7 +83,7 @@ def get_neighbor_finder(data, uniform):
   return NeighborFinder(adj_list, uniform=uniform)
 
 
-class NeighborFinder:
+class NeighborFinder(object):
   def __init__(self, adj_list, uniform=False, seed=None):
     self.node_to_neighbors = []
     self.node_to_edge_idxs = []
