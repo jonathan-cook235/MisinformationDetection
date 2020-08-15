@@ -77,7 +77,7 @@ def train(dataset, args):
     for epoch in range(epoch_ckp, epoch_ckp + args.num_epochs):
         model.train()
         epoch_loss = 0
-        for batch in train_data_loader:
+        for i_batch, batch in enumerate(train_data_loader):
             # print(batch)
             # import pdb; pdb.set_trace()
             optimizer.zero_grad()
@@ -92,6 +92,9 @@ def train(dataset, args):
             # TFBoard logging
             train_writer.add_scalar("loss", loss.mean(), global_step)
             global_step += 1
+
+            if i_batch % 10 == 0:
+                print('batch-', i_batch, loss.mean())
 
         print("epoch", epoch, "loss:", epoch_loss / len(train_data_loader))
         if epoch%1==0:
