@@ -72,10 +72,15 @@ class RandEdgeSampler(object):
 
 
 def get_neighbor_finder(data, uniform=False):
-    max_node_dct = np.max(np.array(data.destinations), axis=-1)
-    max_node_lst = np.max(max_node_dct, axis=0)
-    max_node_idx = max_node_lst[0]
+    xxx = [np.array(item_list) for item_list in data.destinations]
+    aaa = [xx[:,0] for xx in xxx]
+    max_node_idx = max([max(aa) for aa in aaa])
+    
+    # max_node_dct = np.max(xxx, axis=0)
+    # max_node_lst = np.max(max_node_dct, axis=0)
+    # max_node_idx = max_node_lst[0]
     # max_node_idx = data.edge_index.max()
+
     adj_list = [[] for _ in range(max_node_idx + 1)]
     for source, destination, edge_idx, timestamp in zip(data.sources, data.destinations,
                                                         data.edge_index,
