@@ -114,14 +114,24 @@ class NeighborFinder(object):
 
   def find_before(self, src_idx, cut_time):
     """
-    Extracts all the interactions happening before cut_time for user src_idx in the overall interaction graph. The returned interactions are sorted by time.
+    Extracts all the interactions happening before cut_time for user src_idx in the overall interaction graph.
+    The returned interactions are sorted by time.
 
     Returns 3 lists: neighbors, edge_idxs, timestamps
 
     """
+    # cut_time = cut_time - 1e-5
     i = np.searchsorted(self.node_to_edge_timestamps[src_idx], cut_time)
 
-    return self.node_to_neighbors[src_idx][:i], self.node_to_edge_idxs[src_idx][:i], self.node_to_edge_timestamps[src_idx][:i]
+    aaa = self.node_to_neighbors[src_idx][:i]
+    bbb = self.node_to_edge_idxs[src_idx][:i]
+    ccc = self.node_to_edge_timestamps[src_idx][:i]
+
+    # print("i", i)
+    # if bbb.shape == (2,2):
+    #   print(bbb.shape)
+
+    return aaa, bbb, ccc
 
   def get_temporal_neighbor(self, source_nodes, timestamps, n_neighbors):
     """
@@ -161,6 +171,7 @@ class NeighborFinder(object):
           edge_times[i, :] = edge_times[i, :][pos]
           edge_idxs[i, :] = edge_idxs[i, :][pos]
         else:
+
           # Take most recent interactions
           source_edge_times = source_edge_times[-n_neighbors:]
           source_neighbors = source_neighbors[-n_neighbors:]
@@ -169,6 +180,9 @@ class NeighborFinder(object):
           assert (len(source_neighbors) <= n_neighbors)
           assert (len(source_edge_times) <= n_neighbors)
           assert (len(source_edge_idxs) <= n_neighbors)
+
+          # if source_edge_idxs.shape == (2,2):
+          #   print(source_edge_idxs.shape)
 
           neighbors[i, n_neighbors - len(source_neighbors):] = source_neighbors
           edge_times[i, n_neighbors - len(source_edge_times):] = source_edge_times
