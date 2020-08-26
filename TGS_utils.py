@@ -181,11 +181,13 @@ class NeighborFinder(object):
           assert (len(source_edge_times) <= n_neighbors)
           assert (len(source_edge_idxs) <= n_neighbors)
 
-          # if source_edge_idxs.shape == (2,2):
+          ## PLEASE MODIFY 'source_edge_idxs' if its shape is abnormal
+          # if source_edge_idxs.shape != (1,2):
           #   print(source_edge_idxs.shape)
+          #   # source_edge_idxs = np.array([source_edge_idxs[0]])
 
           neighbors[i, n_neighbors - len(source_neighbors):] = source_neighbors
           edge_times[i, n_neighbors - len(source_edge_times):] = source_edge_times
-          edge_idxs[i, n_neighbors - len(source_edge_idxs[0]):] = source_edge_idxs
+          edge_idxs[i, n_neighbors - len(source_edge_idxs[0]):] = source_edge_idxs[0]
 
     return neighbors, edge_idxs, edge_times
