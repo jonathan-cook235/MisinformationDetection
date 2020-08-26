@@ -120,16 +120,18 @@ class NeighborFinder(object):
     Returns 3 lists: neighbors, edge_idxs, timestamps
 
     """
-    # cut_time = cut_time - 1e-5
-    i = np.searchsorted(self.node_to_edge_timestamps[src_idx], cut_time)
+    # print(len(self.node_to_edge_timestamps), src_idx)
+    if src_idx < len(self.node_to_edge_timestamps):
+      xxx  =  self.node_to_edge_timestamps[src_idx]
+      i = np.searchsorted(xxx, cut_time)
 
-    aaa = self.node_to_neighbors[src_idx][:i]
-    bbb = self.node_to_edge_idxs[src_idx][:i]
-    ccc = self.node_to_edge_timestamps[src_idx][:i]
+      aaa = self.node_to_neighbors[src_idx][:i]
+      bbb = self.node_to_edge_idxs[src_idx][:i]
+      ccc = self.node_to_edge_timestamps[src_idx][:i]
 
-    # print("i", i)
-    # if bbb.shape == (2,2):
-    #   print(bbb.shape)
+    else:
+      ## Please check if this is feasible
+      aaa, bbb, ccc =  [],[],[]
 
     return aaa, bbb, ccc
 
@@ -181,7 +183,7 @@ class NeighborFinder(object):
           assert (len(source_edge_times) <= n_neighbors)
           assert (len(source_edge_idxs) <= n_neighbors)
 
-          ## PLEASE MODIFY 'source_edge_idxs' if its shape is abnormal
+
           # if source_edge_idxs.shape != (1,2):
           #   print(source_edge_idxs.shape)
           #   # source_edge_idxs = np.array([source_edge_idxs[0]])
