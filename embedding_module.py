@@ -124,8 +124,8 @@ class GraphEmbedding(EmbeddingModule):
                                                    n_neighbors=n_neighbors)
 
       effective_n_neighbors = n_neighbors if n_neighbors > 0 else 1
-      a = len(source_nodes)
-      neighbor_embeddings = neighbor_embeddings.view(len(source_nodes), effective_n_neighbors)
+      aaa = len(source_nodes)
+      neighbor_embeddings = np.reshape(neighbor_embeddings,(aaa, effective_n_neighbors))
       # neighbor_embeddings = neighbor_embeddings.view(len(source_nodes), effective_n_neighbors, -1)
       edge_time_embeddings = self.time_encoder(edge_deltas_torch)
 
