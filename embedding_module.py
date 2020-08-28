@@ -128,7 +128,9 @@ class GraphEmbedding(EmbeddingModule):
       neighbor_embeddings = np.reshape(neighbor_embeddings,(aaa, effective_n_neighbors))
       # neighbor_embeddings = neighbor_embeddings.view(len(source_nodes), effective_n_neighbors, -1)
       # edge_time_embeddings = self.time_encoder(edge_deltas_torch)
-      edge_time_embeddings = self.time_encoder(779)
+      edge_time_embeddings = self.time_encoder(torch.tensor(np.array([779]),
+                                                            dtype=torch.float)
+                                               )
 
       edge_features = self.edge_features[edge_idxs, :]
 

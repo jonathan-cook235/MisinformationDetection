@@ -47,6 +47,7 @@ class TGS(nn.Module):
     def forward(self, data):
         node_features = data.x
         timestamps = data.t
+        print('encoder-decoder', type(timestamps))
         edge_features = data.edge_index
         neighbor_finder = get_neighbor_finder(data)
         node_raw_features = node_features
