@@ -15,7 +15,7 @@ class TimeEncode(torch.nn.Module):
     # self.w.bias = torch.nn.Parameter(torch.zeros(dimension).float())
 
   def forward(self, t):
-    print('time-encoding', type(t))
+    # print('time-encoding', type(t))
     # t has shape [batch_size, seq_len]
     # Add dimension at the end to apply linear layer --> [batch_size, seq_len, 1]
     t = t.unsqueeze(dim=-1)# t = t.view(-1, 1)
