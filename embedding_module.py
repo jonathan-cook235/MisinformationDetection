@@ -128,9 +128,10 @@ class GraphEmbedding(EmbeddingModule):
       neighbor_embeddings = np.reshape(neighbor_embeddings,(aaa, effective_n_neighbors))
       # neighbor_embeddings = neighbor_embeddings.view(len(source_nodes), effective_n_neighbors, -1)
       # edge_time_embeddings = self.time_encoder(edge_deltas_torch)
-      edge_time_embeddings = self.time_encoder(torch.tensor(np.array([self.embedding_dimension]),
-                                                            dtype=torch.float)
-                                               )
+      # edge_time_embeddings = self.time_encoder(torch.tensor(np.array([self.embedding_dimension]),
+      #                                                       dtype=torch.float)
+      #                                          )
+      edge_time_embeddings  = self.time_encoder(timestamps)
 
       # edge_features = self.edge_features[edge_idxs, :]
       edge_features = edge_idxs
@@ -183,7 +184,7 @@ class GraphSumEmbedding(GraphEmbedding):
     #                                dim=-2)
     
     neighbors_features = torch.cat([neighbor_embeddings.float(), edge_time_embeddings, edge_features.float()],
-                                   dim=-2)
+                                   dim=-1)
     neighbor_embeddings = self.linear_1[n_layer - 1](neighbors_features)
     neighbors_sum = torch.sum(neighbor_embeddings, dim=1)
 
