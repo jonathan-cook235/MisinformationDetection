@@ -233,6 +233,8 @@ class DatasetBuilder:
         """
         user_features = {}
 
+        text_embeddings = np.load("rumor_detection_acl2017/output_bert.npy")
+
         with open(os.path.join(DATA_DIR, "user_features.txt")) as text_file:
             # first line contains column names
             self.user_feature_names = text_file.readline().rstrip('\n').split(';')
