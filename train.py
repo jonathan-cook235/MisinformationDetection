@@ -11,6 +11,10 @@ from dataset import DatasetBuilder
 import numpy as np
 import csv
 
+# device_string = 'cuda:{}'.format(GPU) if torch.cuda.is_available() else 'cpu'
+device_string = 'cpu'
+device = torch.device(device_string)
+
 def train(dataset, args):
 
     on_gpu = torch.cuda.is_available()
@@ -32,7 +36,7 @@ def train(dataset, args):
     print("Dimension of hidden space", args.hidden_dim)
 
     # Setting up model
-    model = make_model(dataset_builder.num_node_features, 32, dataset_builder.num_classes, args)
+    model = make_model(dataset_builder.num_node_features, dataset_builder.num_classes, args, device)
     # model = make_model(dataset_builder.num_node_features, args.hidden_dim, args.hidden_dim, dataset_builder.num_classes, args)
     # model = TGS_stack(dataset.num_node_features, 32, dataset.num_classes, args)
     if on_gpu:
@@ -215,18 +219,18 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Train the graph network.')
     parser.add_argument('--dataset', choices=["twitter15", "twitter16"],
                     help='Training dataset', default="twitter15")
-    parser.add_argument('--lr', default=0.001, type=float,
+    parser.add_argument('--lr', default=0.0001, type=float,
                     help='learning rate')
     parser.add_argument('--num_epochs', default=200, type=int, 
                     help='Number of epochs')
     parser.add_argument('--oversampling_ratio', default=1, type=int, 
                     help='Oversampling ratio for data augmentation')
-    parser.add_argument('--num_layers', default=2, type=int,
-                    help='Number of layers')
-    parser.add_argument('--dropout', default=0.0, type=float,
-                    help='dropout for TGS_stack')
-    parser.add_argument('--model_type', default="GAT",
-                    help='Model type for TGS_stack')
+    # parser.add_argument('--num_layers', default=2, type=int,
+    #                 help='Number of layers')
+    # parser.add_argument('--dropout', default=0.0, type=float,
+    #                 help='dropout for TGS_stack')
+    # parser.add_argument('--model_type', default="GAT",
+    #                 help='Model type for TGS_stack')
     parser.add_argument('--batch_size', default=4, type=int,
                     help='Batch_size')
     parser.add_argument('--only_binary', action='store_true',
@@ -243,6 +247,39 @@ if __name__ == "__main__":
                     help='Seed for train/val/test split')
     parser.add_argument('--hidden_dim', default=64, type=int,
                     help='Dimension of hidden space in GCNs')
-   
+
+
+    parser.add_argument('--n_degree', type=int, default=10, help='Number of neighbors to sample')
+    parser.add_argument('--n_head', type=int, default=2, help='Number of heads used in attention layer')
+    # parser.add_argument('--n_epoch', type=int, default=50, help='Number of epochs')
+    parser.add_argument('--n_layer', type=int, default=1, help='Number of network layers')
+    # parser.add_argument('--lr', type=float, default=0.0001, help='Learning rate')
+    parser.add_argument('--patience', type=int, default=5, help='Patience for early stopping')
+    # parser.add_argument('--n_runs', type=int, default=1, help='Number of runs')
+    parser.add_argument('--dropout', type=float, default=0.1, help='Dropout probability')
+    parser.add_argument('--gpu', type=int, default=0, help='Idx for the gpu to use')
+    parser.add_argument('--node_dim', type=int, default=100, help='Dimensions of the node embedding')
+    parser.add_argument('--time_dim', type=int, default=100, help='Dimensions of the time embedding')
+    parser.add_argument('--backprop_every', type=int, default=1, help='Every how many batches to '
+                                                                      'backprop')
+    # parser.add_argument('--use_memory', action='store_true',
+    #                     help='Whether to augment the model with a node memory')
+    parser.add_argument('--embedding_module', type=str, default="graph_sum", choices=[
+        "graph_attention", "graph_sum", "identity", "time"], help='Type of embedding module')
+
+    # parser.add_argument('--message_function', type=str, default="identity", choices=[
+    #     "mlp", "identity"], help='Type of message function')
+    # parser.add_argument('--aggregator', type=str, default="last", help='Type of message '
+    #                                                                    'aggregator')
+    # parser.add_argument('--memory_update_at_end', action='store_true',
+    #                     help='Whether to update memory at the end or at the start of the batch')
+    # parser.add_argument('--message_dim', type=int, default=100, help='Dimensions of the messages')
+    # parser.add_argument('--memory_dim', type=int, default=172, help='Dimensions of the memory for '
+    #                                                                 'each user')
+    # parser.add_argument('--different_new_nodes', action='store_true',
+    #                     help='Whether to use disjoint set of new nodes for train and val')
+    # parser.add_argument('--uniform', action='store_true',
+    #                     help='take uniform sampling from temporal neighbors')
+
     args = parser.parse_args()
     train(args.dataset, args)

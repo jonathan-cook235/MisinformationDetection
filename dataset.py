@@ -116,7 +116,7 @@ class DatasetBuilder:
                                                        user_fts=preprocessed_user_fts)
                 trees.append((news_id, label, node_features, timestamps, edges, sources, destinations))
 
-        self.oversample(trees, ids_to_dataset, ratio=oversampling_ratio)
+        # self.oversample(trees, ids_to_dataset, ratio=oversampling_ratio)
 
         for news_id, label, node_features, timestamps, edges, sources, destinations in trees:
 
@@ -232,8 +232,6 @@ class DatasetBuilder:
             user_features: dict[tweet_id:int -> dict[name feature -> feature]]
         """
         user_features = {}
-
-        text_embeddings = np.load("rumor_detection_acl2017/output_bert.npy")
 
         with open(os.path.join(DATA_DIR, "user_features.txt")) as text_file:
             # first line contains column names
