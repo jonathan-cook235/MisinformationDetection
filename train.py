@@ -10,6 +10,7 @@ from encoder_decoder import make_model
 from dataset import DatasetBuilder
 import numpy as np
 import csv
+import pickle
 
 # device_string = 'cuda:{}'.format(GPU) if torch.cuda.is_available() else 'cpu'
 device_string = 'cpu'
@@ -24,10 +25,21 @@ def train(dataset, args):
     # Loading dataset
 
     time_cutoff = None if args.time_cutoff == "None" else int(args.time_cutoff)
-    dataset_builder = DatasetBuilder(dataset, only_binary=args.only_binary, features_to_consider=args.features,
-                                    time_cutoff=time_cutoff, seed=args.seed)
-    datasets = dataset_builder.create_dataset(standardize_features=args.standardize, 
-                                            on_gpu=on_gpu, oversampling_ratio=args.oversampling_ratio)
+
+    # dataset_file = "rumor_detection_acl2017/dataset.pkl"
+    # if os.path.exists(dataset_file):
+    #     with open(dataset_file, 'rb') as f:
+    #         datasets = pickle.load(f)
+    # else:
+    if True:
+        dataset_builder = DatasetBuilder(dataset, only_binary=args.only_binary, features_to_consider=args.features,
+                                        time_cutoff=time_cutoff, seed=args.seed)
+        datasets = dataset_builder.create_dataset(standardize_features=args.standardize,
+                                                on_gpu=on_gpu, oversampling_ratio=args.oversampling_ratio)
+        # with open(dataset_file, 'wb') as f:
+        #     pickle.dump(datasets, f, pickle.HIGHEST_PROTOCOL)
+
+
     train_data_loader = torch_geometric.data.DataLoader(datasets["train"], batch_size=args.batch_size, shuffle=True)
     val_data_loader = torch_geometric.data.DataLoader(datasets["val"], batch_size=args.batch_size, shuffle=True)
     test_data_loader = torch_geometric.data.DataLoader(datasets["test"], batch_size=args.batch_size, shuffle=True)

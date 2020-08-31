@@ -134,9 +134,9 @@ class GraphEmbedding(EmbeddingModule):
                                                    n_layers=n_layers - 1,
                                                    n_neighbors=n_neighbors)
 
+      neighbor_embeddings = torch.from_numpy(neighbor_embeddings).float().to(self.device)
       effective_n_neighbors = n_neighbors if n_neighbors > 0 else 1
-      aaa = len(source_nodes)
-      neighbor_embeddings = np.reshape(neighbor_embeddings,(aaa, effective_n_neighbors))
+      neighbor_embeddings = neighbor_embeddings.view(len(source_nodes), effective_n_neighbors, -1)
       # neighbor_embeddings = neighbor_embeddings.view(len(source_nodes), effective_n_neighbors, -1)
       edge_time_embeddings = self.time_encoder(edge_deltas_torch)
       # edge_time_embeddings = self.time_encoder(torch.tensor(np.array([self.embedding_dimension]),
@@ -145,21 +145,23 @@ class GraphEmbedding(EmbeddingModule):
       # edge_time_embeddings  = self.time_encoder(timestamps)# ???
 
       # edge_features = self.edge_features[edge_idxs, :]
-      edge_features = edge_idxs# ???
+      # edge_features = edge_idxs# ???
 
       mask = neighbors_torch == 0
       source_embedding = self.aggregate(n_layers, source_node_features,
                                             source_nodes_time_embedding,
                                             neighbor_embeddings,
                                             edge_time_embeddings,
-                                            edge_features,
+                                            # edge_features,
                                             mask)
 
       return source_embedding
 
   def aggregate(self, n_layers, source_node_features, source_nodes_time_embedding,
                 neighbor_embeddings,
-                edge_time_embeddings, edge_features, mask):
+                edge_time_embeddings,
+                # edge_features,
+                mask):
     return None
 
 
@@ -191,13 +193,13 @@ class GraphSumEmbedding(GraphEmbedding):
 
   def aggregate(self, n_layer, source_node_features, source_nodes_time_embedding,
                 neighbor_embeddings,
-                edge_time_embeddings, edge_features, mask):
-    neighbor_embeddings = torch.from_numpy(neighbor_embeddings).long().to(self.device)
-    # neighbors_features = torch.cat([torch.tensor(neighbor_embeddings).float(), edge_time_embeddings, edge_features.float()],
-    #                                dim=-2)
-    
-    neighbors_features = torch.cat([neighbor_embeddings.float(), edge_time_embeddings, edge_features.float()],
-                                   dim=-1)
+                edge_time_embeddings,
+                # edge_features,
+                mask):
+
+    # neighbors_features = torch.cat([neighbor_embeddings.float(), edge_time_embeddings, edge_features.float()],
+    #                                dim=-1)
+    neighbors_features = torch.cat([neighbor_embeddings, edge_time_embeddings], dim=-1)
     neighbor_embeddings = self.linear_1[n_layer - 1](neighbors_features)
     neighbors_sum = torch.sum(neighbor_embeddings, dim=1)
 

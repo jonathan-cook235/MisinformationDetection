@@ -6,6 +6,7 @@ from collections import defaultdict
 import numpy as np
 import pandas as pd
 import torch
+import pickle
 
 import utils
 from text_preprocessing import preprocess_tweets
@@ -88,14 +89,26 @@ class DatasetBuilder:
         user_ids_in_train, tweet_ids_in_train = \
             self.get_user_and_tweet_ids_in_train(trees_to_parse, train_ids)
 
-        tweet_features = self.load_tweet_features()
-        user_features = self.load_user_features()
+        ## load and pre-process files
+        # tweet_features_file = "rumor_detection_acl2017/pco_tweet_features.pkl"
+        # user_features_file = "rumor_detection_acl2017/pro_user_features.pkl"
+        # if os.path.exists(tweet_features_file) and \
+        #     os.path.exists(user_features_file):
+        #     with open(tweet_features_file, 'rb') as f:
+        #         preprocessed_tweet_fts = pickle.load(f)
+        #     with open(user_features_file, 'rb') as f:
+        #         preprocessed_user_fts = pickle.load(f)
+        # else:
+        if True:
+            tweet_features = self.load_tweet_features()
+            user_features = self.load_user_features()
+            preprocessed_tweet_fts = self.preprocess_tweet_features(tweet_features, tweet_ids_in_train)
+            preprocessed_user_fts = self.preprocess_user_features(user_features, user_ids_in_train, standardize_features)
 
-        if standardize_features:
-            print("Standardizing features")
-
-        preprocessed_tweet_fts = self.preprocess_tweet_features(tweet_features, tweet_ids_in_train)
-        preprocessed_user_fts = self.preprocess_user_features(user_features, user_ids_in_train, standardize_features)
+            # with open(tweet_features_file, 'wb') as f:
+            #     pickle.dump(preprocessed_tweet_fts, f, pickle.HIGHEST_PROTOCOL)
+            # with open(user_features_file, 'wb') as f:
+            #     pickle.dump(preprocessed_user_fts, f, pickle.HIGHEST_PROTOCOL)
 
         # basic_tests.test_user_preprocessed_features(preprocessed_user_fts)
 
@@ -104,7 +117,7 @@ class DatasetBuilder:
         ids_to_dataset.update({news_id: 'test' for news_id in test_ids})
 
         dataset = {'train': [], 'val': [], 'test': []}
-        dynamic_dataset = {'train': [], 'val': [], 'test': []}
+        # dynamic_dataset = {'train': [], 'val': [], 'test': []}
 
         trees = []
 
@@ -116,7 +129,7 @@ class DatasetBuilder:
                                                        user_fts=preprocessed_user_fts)
                 trees.append((news_id, label, node_features, timestamps, edges, sources, destinations))
 
-        # self.oversample(trees, ids_to_dataset, ratio=oversampling_ratio)
+        self.oversample(trees, ids_to_dataset, ratio=oversampling_ratio)
 
         for news_id, label, node_features, timestamps, edges, sources, destinations in trees:
 
@@ -167,6 +180,7 @@ class DatasetBuilder:
                 dataset[ids_to_dataset[news_id]].append([sequential_data, y])
                 # print(sequential_data.mean(dim=0))
                 # print("label was {}".format(label))
+
             elif dataset_type == "raw":
                 dataset[ids_to_dataset[news_id]].append(
                     [[label, news_id] + edge + list(node_features[edge[1]]) for edge in
@@ -194,35 +208,38 @@ class DatasetBuilder:
             tweet_texts: dict[tweet_id:int -> dict[name feature -> feature]]
         """
 
-        tweet_features = {}
+        if True:
 
-        text_embeddings = np.load("rumor_detection_acl2017/output_bert.npy")
-        # !pip install transformers
-        # import tensorflow as tf
-        # from transformers import BertTokenizer, TFBertModel
-        # from transformers import XLMRobertaModel, XLMRobertaTokenizer
-        # tokenizer = XLMRobertaTokenizer.from_pretrained('xlm-roberta-base')
-        # model = XLMRobertaModel.from_pretrained('xlm-roberta-base')
-        # result = []
-        # i = 0
-        # for _ in data.text:
-        # input_ids = torch.tensor([tokenizer.encode(_, add_special_tokens=True)])[:,:512]
-        # print(input_ids)
-        # with torch.no_grad():
-        #     outputs = model(input_ids)[1].tolist()
-        # result.append(outputs)
-        # i += 1
-        # print(i)
-        # np.save('output_bert.npy', result)
-        
-        with open(os.path.join(DATA_DIR, "tweet_features.txt")) as text_file:
-            # first line contains column names
-            self.tweet_feature_names = text_file.readline().rstrip('\n').split(';')
+            text_embeddings = np.load("rumor_detection_acl2017/output_bert.npy")
+            # !pip install transformers
+            # import tensorflow as tf
+            # from transformers import BertTokenizer, TFBertModel
+            # from transformers import XLMRobertaModel, XLMRobertaTokenizer
+            # tokenizer = XLMRobertaTokenizer.from_pretrained('xlm-roberta-base')
+            # model = XLMRobertaModel.from_pretrained('xlm-roberta-base')
+            # result = []
+            # i = 0
+            # for _ in data.text:
+            # input_ids = torch.tensor([tokenizer.encode(_, add_special_tokens=True)])[:,:512]
+            # print(input_ids)
+            # with torch.no_grad():
+            #     outputs = model(input_ids)[1].tolist()
+            # result.append(outputs)
+            # i += 1
+            # print(i)
+            # np.save('output_bert.npy', result)
 
-        tweet_features_id = pd.read_csv("rumor_detection_acl2017/tweet_features.txt",
-                   delimiter=';',names=None).id
-        for i, tweet_id in enumerate(tweet_features_id):
-            tweet_features[int(tweet_id)] = {"embedding":text_embeddings[i]}
+            with open(os.path.join(DATA_DIR, "tweet_features.txt")) as text_file:
+                # first line contains column names
+                self.tweet_feature_names = text_file.readline().rstrip('\n').split(';')
+
+            tweet_features_id = pd.read_csv("rumor_detection_acl2017/tweet_features.txt",
+                       delimiter=';',names=None).id
+
+            tweet_features = {}
+            for i, tweet_id in enumerate(tweet_features_id):
+                tweet_features[int(tweet_id)] = {"embedding":text_embeddings[i]}
+
 
         return tweet_features
 
@@ -231,15 +248,16 @@ class DatasetBuilder:
         Returns:
             user_features: dict[tweet_id:int -> dict[name feature -> feature]]
         """
-        user_features = {}
+        if True:
+            user_features = {}
+            with open(os.path.join(DATA_DIR, "user_features.txt")) as text_file:
+                # first line contains column names
+                self.user_feature_names = text_file.readline().rstrip('\n').split(';')
+                for line in text_file.readlines():
+                    features = line.rstrip('\n').split(";")
+                    user_features[int(features[0])] = {self.user_feature_names[i]: features[i]
+                                                       for i in range(1, len(features))}
 
-        with open(os.path.join(DATA_DIR, "user_features.txt")) as text_file:
-            # first line contains column names
-            self.user_feature_names = text_file.readline().rstrip('\n').split(';')
-            for line in text_file.readlines():
-                features = line.rstrip('\n').split(";")
-                user_features[int(features[0])] = {self.user_feature_names[i]: features[i]
-                                                   for i in range(1, len(features))}
         return user_features
 
     def preprocess_tweet_features(self, tweet_features, tweet_ids_in_train):
