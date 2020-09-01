@@ -39,7 +39,6 @@ def train(dataset, args):
         # with open(dataset_file, 'wb') as f:
         #     pickle.dump(datasets, f, pickle.HIGHEST_PROTOCOL)
 
-
     train_data_loader = torch_geometric.data.DataLoader(datasets["train"], batch_size=args.batch_size, shuffle=True)
     val_data_loader = torch_geometric.data.DataLoader(datasets["val"], batch_size=args.batch_size, shuffle=True)
     test_data_loader = torch_geometric.data.DataLoader(datasets["test"], batch_size=args.batch_size, shuffle=True)
@@ -264,7 +263,7 @@ if __name__ == "__main__":
     parser.add_argument('--n_degree', type=int, default=10, help='Number of neighbors to sample')
     parser.add_argument('--n_head', type=int, default=2, help='Number of heads used in attention layer')
     # parser.add_argument('--n_epoch', type=int, default=50, help='Number of epochs')
-    parser.add_argument('--n_layer', type=int, default=1, help='Number of network layers')
+    parser.add_argument('--n_layer', type=int, default=2, help='Number of network layers')
     # parser.add_argument('--lr', type=float, default=0.0001, help='Learning rate')
     parser.add_argument('--patience', type=int, default=5, help='Patience for early stopping')
     # parser.add_argument('--n_runs', type=int, default=1, help='Number of runs')

@@ -17,8 +17,7 @@ from time_encoding import TimeEncode
 
 def make_model(n_node_features, output_dim, args, device):  # hyperparameters to be defined
     "Construct a model from hyperparameters."
-    model = EncoderDecoder(
-        TGS(
+    tgs_encoder  = TGS(
             n_node_features,
             # neighbor_finder=train_ngh_finder,
             # node_features=node_features,
@@ -33,11 +32,12 @@ def make_model(n_node_features, output_dim, args, device):  # hyperparameters to
             n_neighbors=args.n_degree,
             # mean_time_shift_src=mean_time_shift_src, std_time_shift_src=std_time_shift_src,
             # mean_time_shift_dst=mean_time_shift_dst, std_time_shift_dst=std_time_shift_dst
-        ),
-        # veracity_prediction(input_dim=args.embedding_dimension, hidden_dim=args.embedding_dimension,
-        #                     output_dim=output_dim, args=args))
-        veracity_prediction(input_dim=n_node_features, hidden_dim=n_node_features,
-                        output_dim=output_dim, args=args))
+        )
+    veracity_decoder =  Veracity_Pred(input_dim=n_node_features, hidden_dim=args.hidden_dim,
+                        output_dim=output_dim, args=args)
+    model = EncoderDecoder(encoder = tgs_encoder,
+        decoder = veracity_decoder
+        )
 
     # This was important from their code.
     # Initialize parameters with Glorot / fan_avg.
@@ -52,19 +52,20 @@ class EncoderDecoder(nn.Module):
     A standard Encoder-Decoder architecture. 
     
     """
-    def __init__(self, TGS, veracity_prediction):
+    def __init__(self, encoder, decoder):
         super(EncoderDecoder, self).__init__()
-        self.TGS = TGS
-        self.veracity_prediction = veracity_prediction
+        self.encoder = encoder
+        self.decoder = decoder
         
     def forward(self, data):
-        return self.decode(self.encode(data))
+        node_embeddings = self.encode(data)
+        return self.decode(node_embeddings)
     
     def encode(self, data):
-        return self.TGS(data)
+        return self.encoder(data)
     
     def decode(self, source_embedding):
-        return self.veracity_prediction(source_embedding)
+        return self.decoder(source_embedding)
     
 class TGS(nn.Module):
     
@@ -100,10 +101,11 @@ class TGS(nn.Module):
         # self.n_node_features = node_features.shape[1]
         # self.n_nodes = node_features.shape[0]
         self.n_edge_features = 20#???
+        self.n_time_features = 5
         self.embedding_dimension = self.n_node_features
 
         # self.time_encoder = TimeEncode(dimension=self.n_node_features)
-        self.time_encoder = TimeEncode()
+        self.time_encoder = TimeEncode(dimension=self.n_time_features)
 
         self.embedding_module = get_embedding_module(module_type=embedding_module_type,
                                                      # node_features=self.node_features,
@@ -114,7 +116,7 @@ class TGS(nn.Module):
                                                      n_layers=self.n_layers,
                                                      n_node_features=self.n_node_features,
                                                      n_edge_features=self.n_edge_features,
-                                                     n_time_features=self.n_node_features,
+                                                     n_time_features=self.n_time_features,
                                                      embedding_dimension=self.embedding_dimension,
                                                      device=self.device,
                                                      n_heads=n_heads, dropout=dropout,
@@ -157,13 +159,15 @@ class TGS(nn.Module):
 
         # aggregate node embeddings
         node_embeddings = \
-            self.embedding_module.compute_embedding(source_nodes=node_features,
-                                                    timestamps=timestamps,
-                                                    neighbor_finder=neighbor_finder,
-                                                    n_layers=2,
-                                                    n_neighbors=10,
-                                                    time_diffs=None,
-                                                    memory = None)
+            self.embedding_module.compute_embedding(
+                raw_node_features=node_features,
+                source_nodes=node_features,
+                timestamps=timestamps,
+                neighbor_finder=neighbor_finder,
+                n_layers=self.n_layers,
+                n_neighbors=self.n_neighbors,
+                time_diffs=None,
+                memory = None)
         return node_embeddings
     
     
@@ -215,22 +219,23 @@ class TGS(nn.Module):
             
 #         return hidden
     
-class veracity_prediction(nn.Module):
+class Veracity_Pred(nn.Module):
     
     def __init__(self, input_dim, hidden_dim, output_dim, args):
         """
         Decoder for veracity prediction
 
         """
-        super(veracity_prediction, self).__init__()
+        super(Veracity_Pred, self).__init__()
         self.input_dim = input_dim
         self.hidden_dim  = hidden_dim
         self.output_dim = output_dim
         self.fc1 = nn.Linear(self.input_dim, self.hidden_dim)
         self.relu = nn.ReLU()
         self.fc2 = nn.Linear(self.hidden_dim, output_dim)
+        self.sft =  nn.Softmax()
         
-    def forward(self, hidden):
+    def forward(self, node_embeddings):
         """
 
         Parameters
@@ -242,10 +247,9 @@ class veracity_prediction(nn.Module):
         output : veracity prediction.
 
         """
-        embed = self.fc1(hidden)
-        relu = self.relu(embed)
-        output = self.fc2(relu)
-        soft = np.exp(output - np.max(output))
-        output = soft/soft.sum()
+        hidden = self.relu(self.fc1(node_embeddings))
+        output = self.sft(self.fc2(hidden))
+        # soft = np.exp(output - np.max(output))
+        # output = soft/soft.sum()
         return output
 

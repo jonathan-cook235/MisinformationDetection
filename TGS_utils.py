@@ -125,8 +125,8 @@ class NeighborFinder(object):
       xxx  =  self.node_to_edge_timestamps[src_idx]
       i = np.searchsorted(xxx, cut_time)
 
-      aaa = self.node_to_neighbors[src_idx][:i]
-      bbb = self.node_to_edge_idxs[src_idx][:i]
+      aaa = self.node_to_neighbors[src_idx][:i] #node index
+      bbb = self.node_to_edge_idxs[src_idx][:i] #edge index
       ccc = self.node_to_edge_timestamps[src_idx][:i]
 
     else:
@@ -157,7 +157,9 @@ class NeighborFinder(object):
       np.int32)  # each entry in position (i,j) represent the interaction index of an interaction between user src_idx_l[i] and item neighbors[i,j] happening before cut_time_l[i]
 
     for i, (source_node, timestamp) in enumerate(zip(source_nodes, timestamps)):
-      source_neighbors, source_edge_idxs, source_edge_times = self.find_before(i, timestamp)  # extracts all neighbors, interactions indexes and timestamps of all interactions of user source_node happening before cut_time
+      source_neighbors, source_edge_idxs, source_edge_times = self.find_before(i, timestamp)
+      # extracts all neighbors, interactions indexes and timestamps of all interactions
+      # of user source_node happening before cut_time
 
       if len(source_neighbors) > 0 and n_neighbors > 0:
         if self.uniform:  # if we are applying uniform sampling, shuffles the data above before sampling

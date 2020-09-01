@@ -17,6 +17,299 @@ from sklearn.preprocessing import StandardScaler
 DATA_DIR = "rumor_detection_acl2017"
 
 
+def load_labels(dataset_dir):
+    """
+    Returns:
+        labels: dict[news_id:int -> label:int]
+    """
+    labels = {}
+    with open(os.path.join(dataset_dir, "label.txt")) as label_file:
+        for line in label_file.readlines():
+            label, news_id = line.split(":")
+            labels[int(news_id)] = label
+    return labels
+
+def get_user_and_tweet_ids_in_train(trees_to_parse, train_ids):
+    """ Returns sets of all the user ids and tweet ids that appear in train set """
+
+    user_ids_in_train = set()
+    tweet_ids_in_train = set()
+    for tree_file_name in trees_to_parse:
+        news_id = utils.get_root_id(tree_file_name)
+        if news_id in train_ids:
+            with open(tree_file_name, "rt") as tree_file:
+                for line in tree_file.readlines():
+                    if "ROOT" in line:
+                        continue
+                    tweet_in, tweet_out, user_in, user_out, _, _ = utils.parse_edge_line(line)
+                    user_ids_in_train.add(user_in)  # user_ids_in_train may be bigger
+                    user_ids_in_train.add(user_out)
+                    tweet_ids_in_train.add(tweet_in)
+                    tweet_ids_in_train.add(tweet_out)
+    return user_ids_in_train, tweet_ids_in_train
+
+
+def load_tweet_features():
+    """
+    Returns:
+       tweet_texts: dict[tweet_id:int -> dict[name feature -> feature]]
+    """
+
+    if True:
+        # !pip install transformers
+        # import tensorflow as tf
+        # from transformers import BertTokenizer, TFBertModel
+        # from transformers import XLMRobertaModel, XLMRobertaTokenizer
+        # tokenizer = XLMRobertaTokenizer.from_pretrained('xlm-roberta-base')
+        # model = XLMRobertaModel.from_pretrained('xlm-roberta-base')
+        # result = []
+        # i = 0
+        # for _ in data.text:
+        # input_ids = torch.tensor([tokenizer.encode(_, add_special_tokens=True)])[:,:512]
+        # print(input_ids)
+        # with torch.no_grad():
+        #     outputs = model(input_ids)[1].tolist()
+        # result.append(outputs)
+        # i += 1
+        # print(i)
+        # np.save('output_bert.npy', result)
+        text_embeddings = np.load("rumor_detection_acl2017/output_bert.npy")
+
+    with open(os.path.join(DATA_DIR, "tweet_features.txt")) as text_file:
+        # first line contains column names
+        tweet_feature_names = text_file.readline().rstrip('\n').split(';')
+
+    tweet_features_id = pd.read_csv("rumor_detection_acl2017/tweet_features.txt",
+                                    delimiter=';',names=None).id
+    tweet_features = {}
+    for i, tweet_id in enumerate(tweet_features_id):
+        tweet_features[int(tweet_id)] = {"embedding":text_embeddings[i]}
+
+    return tweet_features
+
+def load_user_features():
+    """
+    Returns:
+        user_features: dict[tweet_id:int -> dict[name feature -> feature]]
+    """
+    if True:
+        user_features = {}
+        with open(os.path.join(DATA_DIR, "user_features.txt")) as text_file:
+            # first line contains column names
+            user_feature_names = text_file.readline().rstrip('\n').split(';')
+            for line in text_file.readlines():
+                features = line.rstrip('\n').split(";")
+                user_features[int(features[0])] = {user_feature_names[i]: features[i]
+                                                    for i in range(1, len(features))}
+
+    return user_features
+
+def preprocess_tweet_features(tweet_features, tweet_ids_in_train):
+    """ Preprocess all tweet features to transform dicts into fixed-sized array.
+
+    Args:
+        tweet_features: dict[tweet_id -> dict[name_feature -> feature]]
+    Returns:
+        defaultdict[tweet_id -> np.array(n_dim)]
+
+    """
+
+    dict_defaults = {
+        'embed': np.zeros((768))
+        }
+
+    def default_tweet_features():
+        """ Return np array of default features sorted by alphabetic order """
+        return np.array([val for key, val in
+                        sorted(dict_defaults.items(), key=lambda x: x[0])]).reshape(-1)
+
+    # new_tweet_features = {key: np.array([]) for key, val in tweet_features.items()}
+
+    new_tweet_features = {key: np.array([key_val[1] for key_val in sorted(value.items(), key=lambda x: x[0])]).reshape(-1)
+                        for key, value in tweet_features.items()}
+
+    return defaultdict(default_tweet_features, new_tweet_features)
+
+
+def preprocess_user_features(user_features, user_ids_in_train, standardize_features=True):
+    """ Preprocess all user features to transform dicts into fixed-sized array.
+
+    Args:
+        user_features: dict[user_id -> dict[name_feature -> feature]]
+    Returns:
+        defaultdict[user_id -> np.array(n_dim)]
+    """
+
+    # Available variables
+    # id;
+    # created_at;
+    # description;
+    # favourites_count;
+    # followers_count;
+    # friends_count;
+    # geo_enabled;
+    # listed_count;
+    # location;
+    # name;
+    # screen_name;
+    # statuses_count;
+    # verified
+
+    # Features we use:
+    # created_at
+    # favourites_count
+    # followers_count
+    # friends_count
+    # geo_enabled
+    # has_description
+    # len_name
+    # len_screen_name
+    # listed_count
+    # statuses_count
+    # verified
+
+    for user_id, features in user_features.items():
+
+        new_features = {}  # will contain the processed features of current user
+
+        if "created_at" in features:
+            new_features['created_at'] = \
+                utils.from_date_text_to_timestamp(features['created_at'])
+
+        integer_features = [
+            "favourites_count",
+            "followers_count",
+            "friends_count",
+            "listed_count",
+            "statuses_count",
+        ]
+        # print(features.keys())
+        for int_feature in integer_features:
+            new_features[int_feature] = float(features[int_feature])
+
+        new_features["verified"] = float(features['verified'] == 'True')
+        new_features["geo_enabled"] = float(features['geo_enabled'] == 'True')
+        new_features['has_description'] = float(len(features['description']) > 0)
+        new_features['len_name'] = float(len(features['name']))
+        new_features['len_screen_name'] = float(len(features['screen_name']))
+
+        user_features[user_id] = new_features
+
+    user_features_train_only = {key: val for key, val in user_features.items() if key in user_ids_in_train}
+
+    # Standardizing
+    if standardize_features:
+        for ft in [
+            "created_at",
+            "favourites_count",
+            "followers_count",
+            "friends_count",
+            "listed_count",
+            "statuses_count",
+        ]:
+            scaler = StandardScaler().fit(
+                np.array([val[ft] for val in user_features_train_only.values()]).reshape(-1, 1)
+            )
+
+            # faster to do this way as we don't have to convert to np arrays
+            mean, std = scaler.mean_[0], scaler.var_[0] ** (1 / 2)
+            for key in user_features.keys():
+                user_features[key][ft] = (user_features[key][ft] - mean) / std
+
+            user_features_train_only = {key: val for key, val in user_features.items() if key in user_ids_in_train}
+
+    dict_defaults = {
+        'created_at': np.median([elt["created_at"] for elt in user_features_train_only.values()]),
+        'favourites_count': np.median([elt["favourites_count"] for elt in user_features_train_only.values()]),
+        'followers_count': np.median([elt["followers_count"] for elt in user_features_train_only.values()]),
+        'friends_count': np.median([elt["friends_count"] for elt in user_features_train_only.values()]),
+        'geo_enabled': 0,
+        'has_description': 0,
+        'len_name': np.median([elt["len_name"] for elt in user_features_train_only.values()]),
+        'len_screen_name': np.median([elt["len_screen_name"] for elt in user_features_train_only.values()]),
+        'listed_count': np.median([elt["listed_count"] for elt in user_features_train_only.values()]),
+        'statuses_count': np.median([elt["statuses_count"] for elt in user_features_train_only.values()]),
+        'verified': 0
+    }
+
+    def default_user_features():
+        """ Return np array of default features sorted by alphabetic order """
+        return np.array([val for key, val in
+                         sorted(dict_defaults.items(), key=lambda x: x[0])])
+
+    #  user features: key=uid, value=dict[ftname:valueft]
+    np_user_features = {key: np.array([key_val[1] for key_val in sorted(value.items(), key=lambda x: x[0])]) for
+                        key, value in user_features.items()}
+
+    aaa = defaultdict(default_user_features, np_user_features)
+    return aaa
+
+def oversample(trees, ids_to_dataset, ratio=1):
+    """ Creates and adds new samples to trees.
+
+    The way it does it is:
+    while ratio is not reached:
+        take a random tree in train, and check it is big enough
+        cut it at a random max_time
+        slighly change features
+
+
+    Args:
+        trees: (
+            news_id:int,
+            label:int,
+            node_features: list:np-arrays,
+            edges:(node_id:int, node_id, time_out, user_in, user_out)
+        )
+        ids_to_dataset: dict(id:int -> dataset:str between 'train', 'test', 'val)
+        ratio: float which represents #(train examples after oversampling)/#(train examples before oversampling)
+            Must be greater or equal to 1
+
+    Retuns:
+        trees: same format, but more elements
+    """
+    assert ratio >= 1
+
+    print("Oversampling...")
+
+    initial_nb_train_examples = sum([1 if val == 'train' else 0
+                                     for val in ids_to_dataset.values()])
+    current_nb_train_examples = initial_nb_train_examples
+    random.seed(a=64)
+
+    print(f"Before oversampling: {len(trees)} trees, {initial_nb_train_examples} train trees")
+
+    while current_nb_train_examples / initial_nb_train_examples < ratio:
+
+        # Pick a tree in train set
+        tree_number = random.randint(0, len(trees) - 1)
+        news_id, label, node_features, edges = trees[tree_number]
+        if ids_to_dataset[news_id] != 'train' or len(edges) < 50:
+            continue
+
+        # Modify it -> cut a part of it
+        r = random.random()
+        while r < 0.8:
+            r = random.random()
+        new_edges = edges[:int(r * len(edges))]
+
+        last_node = max([e[0] for e in new_edges] + [e[1] for e in new_edges])
+        new_node_features = node_features[:(last_node + 1)]
+
+        # Slightly change the features
+        for node_ft_array in new_node_features:
+            for i in range(len(node_ft_array)):
+                if node_ft_array[i] > 10:  # basically, if it is not a categorical variable
+                    random_value = random.random()
+                    node_ft_array[i] += (random_value - 0.5) * 2 * (node_ft_array[i] / 50)
+
+        # Add the modified version to the existing trees
+        # The new id will be current_nb_train_examples+1000
+        trees.append((current_nb_train_examples + 1000, label, new_node_features, new_edges))
+        ids_to_dataset[current_nb_train_examples + 1000] = 'train'
+        current_nb_train_examples += 1
+
+    print(f"After oversampling: {len(trees)} trees, {current_nb_train_examples} train trees")
 
 
 class DatasetBuilder:
@@ -72,7 +365,7 @@ class DatasetBuilder:
 
         trees_to_parse = utils.get_tree_file_names(self.dataset_dir)
 
-        labels = self.load_labels()
+        labels = load_labels(self.dataset_dir)
 
         # Create train-val-test split
         # Remove useless trees (i.e. with labels that we don't consider)
@@ -87,7 +380,7 @@ class DatasetBuilder:
         print(f"Len train/val/test {len(train_ids)} {len(val_ids)} {len(test_ids)}")
 
         user_ids_in_train, tweet_ids_in_train = \
-            self.get_user_and_tweet_ids_in_train(trees_to_parse, train_ids)
+            get_user_and_tweet_ids_in_train(trees_to_parse, train_ids)
 
         ## load and pre-process files
         # tweet_features_file = "rumor_detection_acl2017/pco_tweet_features.pkl"
@@ -100,10 +393,10 @@ class DatasetBuilder:
         #         preprocessed_user_fts = pickle.load(f)
         # else:
         if True:
-            tweet_features = self.load_tweet_features()
-            user_features = self.load_user_features()
-            preprocessed_tweet_fts = self.preprocess_tweet_features(tweet_features, tweet_ids_in_train)
-            preprocessed_user_fts = self.preprocess_user_features(user_features, user_ids_in_train, standardize_features)
+            tweet_features = load_tweet_features()
+            user_features = load_user_features()
+            preprocessed_tweet_fts = preprocess_tweet_features(tweet_features, tweet_ids_in_train)
+            preprocessed_user_fts = preprocess_user_features(user_features, user_ids_in_train, standardize_features)
 
             # with open(tweet_features_file, 'wb') as f:
             #     pickle.dump(preprocessed_tweet_fts, f, pickle.HIGHEST_PROTOCOL)
@@ -129,7 +422,7 @@ class DatasetBuilder:
                                                        user_fts=preprocessed_user_fts)
                 trees.append((news_id, label, node_features, timestamps, edges, sources, destinations))
 
-        self.oversample(trees, ids_to_dataset, ratio=oversampling_ratio)
+        oversample(trees, ids_to_dataset, ratio=oversampling_ratio)
 
         for news_id, label, node_features, timestamps, edges, sources, destinations in trees:
 
@@ -189,233 +482,6 @@ class DatasetBuilder:
         print(f"Dataset loaded in {time.time() - start_time:.3f}s")
 
         return dataset
-
-    def load_labels(self):
-        """
-        Returns:
-            labels: dict[news_id:int -> label:int]
-        """
-        labels = {}
-        with open(os.path.join(self.dataset_dir, "label.txt")) as label_file:
-            for line in label_file.readlines():
-                label, news_id = line.split(":")
-                labels[int(news_id)] = label
-        return labels
-
-    def load_tweet_features(self):
-        """
-        Returns:
-            tweet_texts: dict[tweet_id:int -> dict[name feature -> feature]]
-        """
-
-        if True:
-
-            text_embeddings = np.load("rumor_detection_acl2017/output_bert.npy")
-            # !pip install transformers
-            # import tensorflow as tf
-            # from transformers import BertTokenizer, TFBertModel
-            # from transformers import XLMRobertaModel, XLMRobertaTokenizer
-            # tokenizer = XLMRobertaTokenizer.from_pretrained('xlm-roberta-base')
-            # model = XLMRobertaModel.from_pretrained('xlm-roberta-base')
-            # result = []
-            # i = 0
-            # for _ in data.text:
-            # input_ids = torch.tensor([tokenizer.encode(_, add_special_tokens=True)])[:,:512]
-            # print(input_ids)
-            # with torch.no_grad():
-            #     outputs = model(input_ids)[1].tolist()
-            # result.append(outputs)
-            # i += 1
-            # print(i)
-            # np.save('output_bert.npy', result)
-
-            with open(os.path.join(DATA_DIR, "tweet_features.txt")) as text_file:
-                # first line contains column names
-                self.tweet_feature_names = text_file.readline().rstrip('\n').split(';')
-
-            tweet_features_id = pd.read_csv("rumor_detection_acl2017/tweet_features.txt",
-                       delimiter=';',names=None).id
-
-            tweet_features = {}
-            for i, tweet_id in enumerate(tweet_features_id):
-                tweet_features[int(tweet_id)] = {"embedding":text_embeddings[i]}
-
-
-        return tweet_features
-
-    def load_user_features(self):
-        """
-        Returns:
-            user_features: dict[tweet_id:int -> dict[name feature -> feature]]
-        """
-        if True:
-            user_features = {}
-            with open(os.path.join(DATA_DIR, "user_features.txt")) as text_file:
-                # first line contains column names
-                self.user_feature_names = text_file.readline().rstrip('\n').split(';')
-                for line in text_file.readlines():
-                    features = line.rstrip('\n').split(";")
-                    user_features[int(features[0])] = {self.user_feature_names[i]: features[i]
-                                                       for i in range(1, len(features))}
-
-        return user_features
-
-    def preprocess_tweet_features(self, tweet_features, tweet_ids_in_train):
-        """ Preprocess all tweet features to transform dicts into fixed-sized array.
-
-        Args:
-            tweet_features: dict[tweet_id -> dict[name_feature -> feature]]
-        Returns:
-            defaultdict[tweet_id -> np.array(n_dim)]
-
-        """
-
-        dict_defaults = {
-            'embed': np.zeros((768))
-        }
-
-        def default_tweet_features():
-            """ Return np array of default features sorted by alphabetic order """
-            return np.array([val for key, val in
-                             sorted(dict_defaults.items(), key=lambda x: x[0])]).reshape(-1)
-
-        # new_tweet_features = {key: np.array([]) for key, val in tweet_features.items()}
-
-        new_tweet_features = {key: np.array([key_val[1] for key_val in sorted(value.items(), key=lambda x: x[0])]).reshape(-1) 
-                            for key, value in tweet_features.items()}
-
-        return defaultdict(default_tweet_features, new_tweet_features)
-
-    def preprocess_user_features(self, user_features, user_ids_in_train, standardize_features=True):
-        """ Preprocess all user features to transform dicts into fixed-sized array.
-
-        Args:
-            user_features: dict[user_id -> dict[name_feature -> feature]]
-        Returns:
-            defaultdict[user_id -> np.array(n_dim)]
-        """
-
-        # Available variables
-        # id;
-        # created_at;
-        # description;
-        # favourites_count;
-        # followers_count;
-        # friends_count;
-        # geo_enabled;
-        # listed_count;
-        # location;
-        # name;
-        # screen_name;
-        # statuses_count;
-        # verified
-
-        # Features we use:
-        # created_at
-        # favourites_count 
-        # followers_count 
-        # friends_count 
-        # geo_enabled
-        # has_description
-        # len_name
-        # len_screen_name
-        # listed_count
-        # statuses_count 
-        # verified
-
-        for user_id, features in user_features.items():
-
-            new_features = {}  # will contain the processed features of current user
-
-            if "created_at" in features:
-                new_features['created_at'] = \
-                    utils.from_date_text_to_timestamp(features['created_at'])
-
-            integer_features = [
-                "favourites_count",
-                "followers_count",
-                "friends_count",
-                "listed_count",
-                "statuses_count",
-            ]
-            # print(features.keys())
-            for int_feature in integer_features:
-                new_features[int_feature] = float(features[int_feature])
-
-            new_features["verified"] = float(features['verified'] == 'True')
-            new_features["geo_enabled"] = float(features['geo_enabled'] == 'True')
-            new_features['has_description'] = float(len(features['description']) > 0)
-            new_features['len_name'] = float(len(features['name']))
-            new_features['len_screen_name'] = float(len(features['screen_name']))
-
-            user_features[user_id] = new_features
-
-        user_features_train_only = {key: val for key, val in user_features.items() if key in user_ids_in_train}
-
-        # Standardizing
-        if standardize_features:
-            for ft in [
-                "created_at",
-                "favourites_count",
-                "followers_count",
-                "friends_count",
-                "listed_count",
-                "statuses_count",
-            ]:
-                scaler = StandardScaler().fit(
-                    np.array([val[ft] for val in user_features_train_only.values()]).reshape(-1, 1)
-                )
-
-                # faster to do this way as we don't have to convert to np arrays
-                mean, std = scaler.mean_[0], scaler.var_[0] ** (1 / 2)
-                for key in user_features.keys():
-                    user_features[key][ft] = (user_features[key][ft] - mean) / std
-
-                user_features_train_only = {key: val for key, val in user_features.items() if key in user_ids_in_train}
-
-        dict_defaults = {
-            'created_at': np.median([elt["created_at"] for elt in user_features_train_only.values()]),
-            'favourites_count': np.median([elt["favourites_count"] for elt in user_features_train_only.values()]),
-            'followers_count': np.median([elt["followers_count"] for elt in user_features_train_only.values()]),
-            'friends_count': np.median([elt["friends_count"] for elt in user_features_train_only.values()]),
-            'geo_enabled': 0,
-            'has_description': 0,
-            'len_name': np.median([elt["len_name"] for elt in user_features_train_only.values()]),
-            'len_screen_name': np.median([elt["len_screen_name"] for elt in user_features_train_only.values()]),
-            'listed_count': np.median([elt["listed_count"] for elt in user_features_train_only.values()]),
-            'statuses_count': np.median([elt["statuses_count"] for elt in user_features_train_only.values()]),
-            'verified': 0
-        }
-
-        def default_user_features():
-            """ Return np array of default features sorted by alphabetic order """
-            return np.array([val for key, val in
-                             sorted(dict_defaults.items(), key=lambda x: x[0])])
-
-        #  user features: key=uid, value=dict[ftname:valueft]
-        np_user_features = {key: np.array([key_val[1] for key_val in sorted(value.items(), key=lambda x: x[0])]) for
-                            key, value in user_features.items()}
-
-        return defaultdict(default_user_features, np_user_features)
-
-    def get_user_and_tweet_ids_in_train(self, trees_to_parse, train_ids):
-        """ Returns sets of all the user ids and tweet ids that appear in train set """
-
-        user_ids_in_train = set()
-        tweet_ids_in_train = set()
-        for tree_file_name in trees_to_parse:
-            news_id = utils.get_root_id(tree_file_name)
-            if news_id in train_ids:
-                with open(tree_file_name, "rt") as tree_file:
-                    for line in tree_file.readlines():
-                        if "ROOT" in line:
-                            continue
-                        tweet_in, tweet_out, user_in, user_out, _, _ = utils.parse_edge_line(line)
-                        user_ids_in_train.add(user_in)  # user_ids_in_train may be bigger
-                        user_ids_in_train.add(user_out)
-                        tweet_ids_in_train.add(tweet_in)
-                        tweet_ids_in_train.add(tweet_out)
-        return user_ids_in_train, tweet_ids_in_train
 
     def build_tree(self, tree_file_name, tweet_fts, user_fts):
         """ Parses the file to build a tree, adding all the features.
@@ -518,72 +584,6 @@ class DatasetBuilder:
             features_node = user_fts[user_out]
         x.append(features_node)
 
-    def oversample(self, trees, ids_to_dataset, ratio=1):
-        """ Creates and adds new samples to trees.
-
-        The way it does it is:
-        while ratio is not reached:
-            take a random tree in train, and check it is big enough
-            cut it at a random max_time
-            slighly change features
-            
-
-        Args:
-            trees: (
-                news_id:int, 
-                label:int, 
-                node_features: list:np-arrays,
-                edges:(node_id:int, node_id, time_out, user_in, user_out)
-            )
-            ids_to_dataset: dict(id:int -> dataset:str between 'train', 'test', 'val)
-            ratio: float which represents #(train examples after oversampling)/#(train examples before oversampling)
-                Must be greater or equal to 1
-        
-        Retuns:
-            trees: same format, but more elements
-        """
-        assert ratio >= 1
-
-        print("Oversampling...")
-
-        initial_nb_train_examples = sum([1 if val == 'train' else 0
-                                         for val in ids_to_dataset.values()])
-        current_nb_train_examples = initial_nb_train_examples
-        random.seed(a=64)
-
-        print(f"Before oversampling: {len(trees)} trees, {initial_nb_train_examples} train trees")
-
-        while current_nb_train_examples / initial_nb_train_examples < ratio:
-
-            # Pick a tree in train set
-            tree_number = random.randint(0, len(trees) - 1)
-            news_id, label, node_features, edges = trees[tree_number]
-            if ids_to_dataset[news_id] != 'train' or len(edges) < 50:
-                continue
-
-            # Modify it -> cut a part of it
-            r = random.random()
-            while r < 0.8:
-                r = random.random()
-            new_edges = edges[:int(r * len(edges))]
-
-            last_node = max([e[0] for e in new_edges] + [e[1] for e in new_edges])
-            new_node_features = node_features[:(last_node + 1)]
-
-            # Slightly change the features
-            for node_ft_array in new_node_features:
-                for i in range(len(node_ft_array)):
-                    if node_ft_array[i] > 10:  # basically, if it is not a categorical variable
-                        random_value = random.random()
-                        node_ft_array[i] += (random_value - 0.5) * 2 * (node_ft_array[i] / 50)
-
-            # Add the modified version to the existing trees
-            # The new id will be current_nb_train_examples+1000
-            trees.append((current_nb_train_examples + 1000, label, new_node_features, new_edges))
-            ids_to_dataset[current_nb_train_examples + 1000] = 'train'
-            current_nb_train_examples += 1
-
-        print(f"After oversampling: {len(trees)} trees, {current_nb_train_examples} train trees")
 
 
 if __name__ == "__main__":
