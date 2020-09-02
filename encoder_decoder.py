@@ -8,12 +8,13 @@ Created on Thu Jul 23 16:21:24 2020
 
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 import numpy as np
 
 from TGS_utils import get_neighbor_finder, NeighborFinder
 from embedding_module import get_embedding_module
 from time_encoding import TimeEncode
-
+import torch_geometric.nn as pyg_nn
 
 def make_model(n_node_features, output_dim, args, device):  # hyperparameters to be defined
     "Construct a model from hyperparameters."
@@ -33,10 +34,10 @@ def make_model(n_node_features, output_dim, args, device):  # hyperparameters to
             # mean_time_shift_src=mean_time_shift_src, std_time_shift_src=std_time_shift_src,
             # mean_time_shift_dst=mean_time_shift_dst, std_time_shift_dst=std_time_shift_dst
         )
-    veracity_decoder =  Veracity_Pred(input_dim=n_node_features, hidden_dim=args.hidden_dim,
+    veracity_predictor =  Veracity_Pred(input_dim=n_node_features, hidden_dim=args.hidden_dim,
                         output_dim=output_dim, args=args)
     model = EncoderDecoder(encoder = tgs_encoder,
-        decoder = veracity_decoder
+        decoder = veracity_predictor
         )
 
     # This was important from their code.
@@ -59,13 +60,13 @@ class EncoderDecoder(nn.Module):
         
     def forward(self, data):
         node_embeddings = self.encode(data)
-        return self.decode(node_embeddings)
+        return self.decode(node_embeddings, data.batch)
     
     def encode(self, data):
         return self.encoder(data)
     
-    def decode(self, source_embedding):
-        return self.decoder(source_embedding)
+    def decode(self, source_embedding, batch):
+        return self.decoder(source_embedding, batch)
     
 class TGS(nn.Module):
     
@@ -170,55 +171,6 @@ class TGS(nn.Module):
                 memory = None)
         return node_embeddings
     
-    
-# class TGS(nn.Module):
-    
-#     def __init__(self, input_dim, hidden_dim, args):
-#         """
-#         Temporal Graph Sum encoder
-
-#         """
-#         super(TGS, self).__init__()
-#         self.input_dim = input_dim
-#         self.hidden_dim  = hidden_dim
-#         self.fc1 = nn.Linear(self.input_dim, self.hidden_dim)
-#         self.relu = nn.ReLU()
-    
-    
-#     def forward(self, data):
-#         """
-        
-#         Parameters
-#         ----------
-#         data : dynamic graph, storing a sequence of timestamped graph snapshots.
-
-#         Returns
-#         -------
-#         hidden : hidden representation of nodes.
-
-#         """
-#         x_final, edge_index_final, batch_final = data[-1].x, data[-1].edge_index, data[-1].batch
-#         batch_final = batch_final.to(x_final.device)
-        
-#         h = np.zeros_like(data)
-#         h_tilde = np.zeros_like(h)
-#         np.delete(h_tilde, 0)
-#         h[0] = x_final
-#         for i in h_tilde:
-#             for j in h_tilde[i]:
-#                 edge_index_current = data[i].edge_index
-#                 h_tilde[i][j] = np.sum(np.concatenate(h[i][j],edge_index_current[j]))
-#                 x = np.concatenate(h[i][j],h_tilde[i][j])
-#                 hidden = self.fc1(x)
-#                 relu = self.relu(hidden)
-#                 h[i+1][j] = relu
-    
-#         hidden = np.zeros_like(h[-1])
-#         for i in h[-1]:
-#             hidden[i] = h[-1][i]
-            
-#         return hidden
-    
 class Veracity_Pred(nn.Module):
     
     def __init__(self, input_dim, hidden_dim, output_dim, args):
@@ -227,15 +179,22 @@ class Veracity_Pred(nn.Module):
 
         """
         super(Veracity_Pred, self).__init__()
+        self.dropout = float(args.dropout)
+
         self.input_dim = input_dim
         self.hidden_dim  = hidden_dim
-        self.output_dim = output_dim
+        # self.output_dim = output_dim
         self.fc1 = nn.Linear(self.input_dim, self.hidden_dim)
         self.relu = nn.ReLU()
-        self.fc2 = nn.Linear(self.hidden_dim, output_dim)
-        self.sft =  nn.Softmax()
+        # self.fc2 = nn.Linear(self.hidden_dim, output_dim)
+        # self.sft =  nn.Softmax()
+
+        # post-message-passing
+        self.post_mp = nn.Sequential(
+            nn.Linear(3 * hidden_dim, 3 * hidden_dim), nn.Dropout(self.dropout),
+            nn.Linear(3 * hidden_dim, output_dim))
         
-    def forward(self, node_embeddings):
+    def forward(self, x, batch):
         """
 
         Parameters
@@ -247,9 +206,22 @@ class Veracity_Pred(nn.Module):
         output : veracity prediction.
 
         """
-        hidden = self.relu(self.fc1(node_embeddings))
-        output = self.sft(self.fc2(hidden))
-        # soft = np.exp(output - np.max(output))
-        # output = soft/soft.sum()
-        return output
+        x = self.relu(self.fc1(x))
+        # output = self.sft(self.fc2(hidden))
+        # return output
+
+        # concatenate max_pool, mean_pool and embedding of first node (i.e. the news root)
+        x1 = pyg_nn.global_max_pool(x, batch)  # shape batch_size * embedding size
+        x2 = pyg_nn.global_mean_pool(x, batch)
+
+        batch_size = x1.size(0)
+        indices_first_nodes = [(batch == i).nonzero()[0] for i in range(batch_size)]
+        x3 = x[indices_first_nodes, :]
+
+        x = torch.cat((x1, x2, x3), dim=1)
+        x = self.post_mp(x)
+
+        return F.log_softmax(x, dim=1)
+
+
 

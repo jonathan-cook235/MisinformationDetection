@@ -81,13 +81,14 @@ def train(dataset, args):
         best_val_acc = checkpoint["best_val_acc"]
         print("Restoring previous model at epoch", epoch_ckp)
 
-    # Training phase
-    def compute_loss(output, label):
-        y_1 = output[0]
-        y_2 = output[1]
-        veracity_loss = -label*np.log(y_2) - (1-label)*np.log(1 - y_1)
-        return veracity_loss
-    
+    # # Training phase
+    # def compute_loss(output, label):
+    #     y_1 = output[0]
+    #     y_2 = output[1]
+    #     veracity_loss = -label*np.log(y_2) - (1-label)*np.log(1 - y_1)
+    #     return veracity_loss
+    #
+    compute_loss = nn.CrossEntropyLoss()
     optimizer = torch.optim.AdamW(model.parameters(), lr=args.lr, weight_decay=5e-4)
     for epoch in range(epoch_ckp, epoch_ckp + args.num_epochs):
         model.train()
@@ -109,7 +110,7 @@ def train(dataset, args):
             global_step += 1
 
             if i_batch % 10 == 0:
-                print('batch-', i_batch, loss.mean())
+                print('batch-', i_batch, loss.mean().item())
 
         print("epoch", epoch, "loss:", epoch_loss / len(train_data_loader))
         if epoch%1==0:
@@ -242,7 +243,7 @@ if __name__ == "__main__":
     #                 help='dropout for TGS_stack')
     # parser.add_argument('--model_type', default="GAT",
     #                 help='Model type for TGS_stack')
-    parser.add_argument('--batch_size', default=4, type=int,
+    parser.add_argument('--batch_size', default=8, type=int,
                     help='Batch_size')
     parser.add_argument('--only_binary', action='store_true',
                     help='Reduces the problem to binary classification')
@@ -260,7 +261,7 @@ if __name__ == "__main__":
                     help='Dimension of hidden space in GCNs')
 
 
-    parser.add_argument('--n_degree', type=int, default=10, help='Number of neighbors to sample')
+    parser.add_argument('--n_degree', type=int, default=5, help='Number of neighbors to sample')
     parser.add_argument('--n_head', type=int, default=2, help='Number of heads used in attention layer')
     # parser.add_argument('--n_epoch', type=int, default=50, help='Number of epochs')
     parser.add_argument('--n_layer', type=int, default=2, help='Number of network layers')

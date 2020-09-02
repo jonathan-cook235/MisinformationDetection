@@ -48,7 +48,6 @@ def get_user_and_tweet_ids_in_train(trees_to_parse, train_ids):
                     tweet_ids_in_train.add(tweet_out)
     return user_ids_in_train, tweet_ids_in_train
 
-
 def load_tweet_features():
     """
     Returns:
@@ -129,7 +128,6 @@ def preprocess_tweet_features(tweet_features, tweet_ids_in_train):
                         for key, value in tweet_features.items()}
 
     return defaultdict(default_tweet_features, new_tweet_features)
-
 
 def preprocess_user_features(user_features, user_ids_in_train, standardize_features=True):
     """ Preprocess all user features to transform dicts into fixed-sized array.
@@ -418,8 +416,10 @@ class DatasetBuilder:
             news_id = utils.get_root_id(tree_file_name)
             label = labels[news_id]
             if (not self.only_binary) or (label in ['false', 'true']):
-                node_features, timestamps, edges, sources, destinations = self.build_tree(tree_file_name, tweet_fts=preprocessed_tweet_fts,
-                                                       user_fts=preprocessed_user_fts)
+                node_features, timestamps, edges, sources, destinations = \
+                    self.build_tree(tree_file_name,
+                                    tweet_fts=preprocessed_tweet_fts,
+                                    user_fts=preprocessed_user_fts)
                 trees.append((news_id, label, node_features, timestamps, edges, sources, destinations))
 
         oversample(trees, ids_to_dataset, ratio=oversampling_ratio)
