@@ -11,7 +11,7 @@ from sahp import SAHP
 from utils import atten_optimizer
 from utils import util
 
-import MMDNE
+import MisinformationDetection/MMDNE/MMDNE
 
 embeddings = MMDNE.save_node_embeddings
 
