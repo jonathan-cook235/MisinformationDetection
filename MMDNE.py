@@ -47,6 +47,9 @@ class MMDNE:
 
         self.epsilon = epsilon
 
+        from sahp_runner import sahp_runner
+        self.sahp = sahp_runner
+
         print ('dataset helper...')
         self.data = DataHelper(tree_file_name, neg_size, hist_len, directed, tlp_flag=self.tlp_flag, trend_pred_flag=self.trend_prediction)
         self.node_dim = self.data.get_node_dim()
@@ -419,6 +422,7 @@ class MMDNE:
         for n_idx in range(self.node_dim):
             writer.write(' '.join(str(d) for d in embeddings[n_idx]) + '\n')
         writer.close()
+        return embeddings
 
 
 if __name__ == '__main__':
