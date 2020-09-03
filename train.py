@@ -39,8 +39,13 @@ def train(dataset, args):
         # with open(dataset_file, 'wb') as f:
         #     pickle.dump(datasets, f, pickle.HIGHEST_PROTOCOL)
 
+    # 285152 datapoints
     train_data_loader = torch_geometric.data.DataLoader(datasets["train"], batch_size=args.batch_size, shuffle=True)
+
+    # 32494 datapoints
     val_data_loader = torch_geometric.data.DataLoader(datasets["val"], batch_size=args.batch_size, shuffle=True)
+
+    #73174 datapoints
     test_data_loader = torch_geometric.data.DataLoader(datasets["test"], batch_size=args.batch_size, shuffle=True)
 
     print("Number of node features", dataset_builder.num_node_features)
@@ -101,7 +106,7 @@ def train(dataset, args):
             loss = compute_loss(out, batch.y)
             epoch_loss += loss.sum().item()
 
-            # Optimization 
+            # Optimization
             loss.backward()
             optimizer.step()
 
@@ -110,7 +115,7 @@ def train(dataset, args):
             global_step += 1
 
             if i_batch % 10 == 0:
-                print('batch-', i_batch, loss.mean().item())
+                print('batch-', i_batch, loss.mean().item())# 22240 * 8
 
         print("epoch", epoch, "loss:", epoch_loss / len(train_data_loader))
         if epoch%1==0:
@@ -243,7 +248,7 @@ if __name__ == "__main__":
     #                 help='dropout for TGS_stack')
     # parser.add_argument('--model_type', default="GAT",
     #                 help='Model type for TGS_stack')
-    parser.add_argument('--batch_size', default=8, type=int,
+    parser.add_argument('--batch_size', default=32, type=int,
                     help='Batch_size')
     parser.add_argument('--only_binary', action='store_true',
                     help='Reduces the problem to binary classification')
@@ -257,19 +262,19 @@ if __name__ == "__main__":
                     help='Time cutoff in mins', default="None")
     parser.add_argument('--seed', default=64, type=int,
                     help='Seed for train/val/test split')
-    parser.add_argument('--hidden_dim', default=64, type=int,
+    parser.add_argument('--hidden_dim', default=32, type=int,
                     help='Dimension of hidden space in GCNs')
 
 
     parser.add_argument('--n_degree', type=int, default=5, help='Number of neighbors to sample')
     parser.add_argument('--n_head', type=int, default=2, help='Number of heads used in attention layer')
     # parser.add_argument('--n_epoch', type=int, default=50, help='Number of epochs')
-    parser.add_argument('--n_layer', type=int, default=2, help='Number of network layers')
+    parser.add_argument('--n_layer', type=int, default=1, help='Number of network layers')
     # parser.add_argument('--lr', type=float, default=0.0001, help='Learning rate')
     parser.add_argument('--patience', type=int, default=5, help='Patience for early stopping')
     # parser.add_argument('--n_runs', type=int, default=1, help='Number of runs')
     parser.add_argument('--dropout', type=float, default=0.1, help='Dropout probability')
-    parser.add_argument('--gpu', type=int, default=0, help='Idx for the gpu to use')
+    parser.add_argument('--gpu', type=int, default=1, help='Idx for the gpu to use')
     parser.add_argument('--node_dim', type=int, default=100, help='Dimensions of the node embedding')
     parser.add_argument('--time_dim', type=int, default=100, help='Dimensions of the time embedding')
     parser.add_argument('--backprop_every', type=int, default=1, help='Every how many batches to '
