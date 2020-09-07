@@ -9,14 +9,14 @@ import torch.nn.functional as F
 import numpy as np
 import math, copy
 
-from models.embedding.event_type import TypeEmbedding
-from models.embedding.position import PositionalEmbedding,BiasedPositionalEmbedding
-from models.embedding.event_embedding import EventEmbedding
-from models.attention.multi_head import MultiHeadedAttention
-from models.utils.sublayer import SublayerConnection
-from models.utils.feed_forward import PositionwiseFeedForward
-from models.base import SeqGenerator, predict_from_hidden
-from models.utils.gelu import GELU
+# from models.embedding.event_type import TypeEmbedding
+# from models.embedding.position import PositionalEmbedding,BiasedPositionalEmbedding
+# from models.embedding.event_embedding import EventEmbedding
+from multi_head import MultiHeadedAttention
+from sublayer import SublayerConnection
+from feed_forward import PositionwiseFeedForward
+from base import SeqGenerator, predict_from_hidden
+from gelu import GELU
 
 from matplotlib import pyplot as plt
 
@@ -67,11 +67,11 @@ class SAHP(nn.Module):
         cell_t = torch.tanh(converge_point + (start_point - converge_point) * torch.exp(- omega * duration_t))
         return cell_t
 
-    def forward(self, seq_dt, seq_types, src_mask):
+    def forward(self, seq_dt, x, src_mask):
         # type_embedding = self.type_emb(seq_types) * math.sqrt(self.d_model)  #
-        position_embedding = self.position_emb
-
-        x = position_embedding
+        # position_embedding = self.position_emb
+        #
+        # x = position_embedding
         for i in range(self.nLayers):
             x = self.input_sublayer(x, lambda _x: self.attention.forward(_x, _x, _x, mask=src_mask))
             x = self.dropout(self.output_sublayer(x, self.feed_forward))
