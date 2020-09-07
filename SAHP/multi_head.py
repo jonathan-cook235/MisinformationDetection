@@ -1,5 +1,5 @@
 import torch.nn as nn
-from .single import Attention
+from single import Attention
 
 
 class MultiHeadedAttention(nn.Module):
