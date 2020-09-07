@@ -47,7 +47,21 @@ def parse_edge_line(line):
     user_in, user_out = int_or_root(orig_list[1]), int_or_root(dest_list[1])
 
     time_in, time_out = float(orig_list[5]), float(dest_list[5])
-    return tweet_in, tweet_out, user_in, user_out, time_in, time_out
+
+    #if orig_list[1] != 'ROOT':
+    # s_node = int(orig_list[1])  # source node
+    # t_node = int(dest_list[1])  # target node
+    # d_time = float(dest_list[5])
+    # if s_node not in list_of_nodes:
+    #     int_node_dict.update({s_node: count})
+    #     list_of_nodes.append((s_node, 0))
+    #     count += 1
+    # if t_node not in list_of_nodes:
+    #     int_node_dict.update({t_node: count})
+    #     list_of_nodes.append(t_node, d_time)
+    #     count += 1
+
+    return tweet_in, tweet_out, user_in, user_out, time_in, time_out #, list_of_nodes
 
 
 def get_root_id(tree_file_name):
