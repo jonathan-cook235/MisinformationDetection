@@ -9,10 +9,6 @@ import time
 import torch
 from torch import autograd
 
-from MMDNE import MMDNE
-
-embeddings = MMDNE.save_node_embeddings
-
 from utils.load_synth_data import process_loaded_sequences
 from train_sahp import make_model, train_eval_sahp
 
@@ -192,7 +188,7 @@ if __name__ == '__main__':
 
     elif args.task in DYNAMIC_GRAPH_TASK:
 
-        mu = torch.cat
+        mu = torch.cat(embeddings, )
 
     else:
         exit()
