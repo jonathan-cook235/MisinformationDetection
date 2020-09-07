@@ -14,6 +14,8 @@ import numpy as np
 from TGS_utils import get_neighbor_finder, NeighborFinder
 from embedding_module import get_embedding_module
 from time_encoding import TimeEncode
+from sahp import SAHP
+
 import torch_geometric.nn as pyg_nn
 
 def make_model(n_node_features, output_dim, args, device):  # hyperparameters to be defined
@@ -36,8 +38,10 @@ def make_model(n_node_features, output_dim, args, device):  # hyperparameters to
         )
     veracity_predictor =  Veracity_Pred(input_dim=n_node_features, hidden_dim=args.hidden_dim,
                         output_dim=output_dim, args=args)
+    timestamp_predictor = Timestamp_Pred(input_dim=n_node_features, hidden_dim=args.hidden_dim,
+                            output_dim=output_dim, args=args)
     model = EncoderDecoder(encoder = tgs_encoder,
-        decoder = veracity_predictor
+        decoder1 = veracity_predictor, decoder2 = timestamp_predictor
         )
 
     # This was important from their code.
@@ -53,10 +57,11 @@ class EncoderDecoder(nn.Module):
     A standard Encoder-Decoder architecture. 
     
     """
-    def __init__(self, encoder, decoder):
+    def __init__(self, encoder, decoder1, decoder2):
         super(EncoderDecoder, self).__init__()
         self.encoder = encoder
-        self.decoder = decoder
+        self.decoder1 = decoder1
+        self.decoder2 = decoder2
         
     def forward(self, data):
         node_embeddings = self.encode(data)
@@ -65,8 +70,11 @@ class EncoderDecoder(nn.Module):
     def encode(self, data):
         return self.encoder(data)
     
-    def decode(self, source_embedding, batch):
-        return self.decoder(source_embedding, batch)
+    def decode1(self, source_embedding, batch):
+        return self.decoder1(source_embedding, batch)
+
+    def decode2(self, source_embedding, batch):
+        return self.decoder2(source_embedding, batch)
     
 class TGS(nn.Module):
     
@@ -223,5 +231,32 @@ class Veracity_Pred(nn.Module):
 
         return F.log_softmax(x, dim=1)
 
+class Timestamp_Pred(nn.Module):
 
+    def __init__(self, input_dim, hidden_dim, output_dim, args):
+        """
+        Decoder for timestamp prediction
 
+        """
+        super(Timestamp_Pred, self).__init__()
+        self.dropout = float(args.dropout)
+
+        self.input_dim = input_dim
+        self.hidden_dim = hidden_dim
+
+    def forward(self, x, batch):
+        """
+
+        Parameters
+        ----------
+        hidden : hidden representation of nodes from TGS encoder.
+
+        Returns
+        -------
+        output : timestamp prediction.
+
+        """
+        timestamps = batch.t
+        position_embedding = x
+        model = SAHP
+        model.forward(timestamps, position_embedding, src_mask)
