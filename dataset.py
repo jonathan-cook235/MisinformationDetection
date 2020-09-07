@@ -38,6 +38,9 @@ def get_user_and_tweet_ids_in_train(trees_to_parse, train_ids):
         news_id = utils.get_root_id(tree_file_name)
         if news_id in train_ids:
             with open(tree_file_name, "rt") as tree_file:
+                int_node_dict = {}
+                list_of_nodes = []
+                count = 0
                 for line in tree_file.readlines():
                     if "ROOT" in line:
                         continue
