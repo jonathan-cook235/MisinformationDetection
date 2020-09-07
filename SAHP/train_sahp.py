@@ -11,7 +11,7 @@ from sahp import SAHP
 from utils import atten_optimizer
 from utils import util
 
-import MisinformationDetection/MMDNE/MMDNE
+from MMDNE import MMDNE
 
 embeddings = MMDNE.save_node_embeddings
 
@@ -78,14 +78,7 @@ def eval_sahp(batch_size, loop_range, seq_lengths, seq_times, seq_types, model, 
     model.train()
     return event_num, epoch_loss
 
-
 def train_eval_sahp(params, embeddings):
-
-    args, process_dim, device, tmax, \
-    train_seq_times, train_seq_types, train_seq_lengths, \
-    dev_seq_times, dev_seq_types, dev_seq_lengths, \
-    test_seq_times, test_seq_types, test_seq_lengths, \
-    batch_size, epoch_num, use_cuda = params
 
     ## sequence length
     train_seq_lengths, reorder_indices_train = train_seq_lengths.sort(descending=True)
@@ -227,7 +220,7 @@ if __name__ == "__main__":
 
     if mode == 'train':
         with autograd.detect_anomaly():
-            train_eval_sahp()
+            train_eval_sahp(params, embeddings)
 
     else:
         pass
