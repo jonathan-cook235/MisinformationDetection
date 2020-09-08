@@ -11,10 +11,6 @@ from sahp import SAHP
 from utils import atten_optimizer
 from utils import util
 
-from MMDNE import MMDNE
-
-embeddings = MMDNE.save_node_embeddings
-
 def make_model(nLayers=6, d_model=128, atten_heads=8, dropout=0.1, process_dim=10,
                device = 'cpu', pe='concat', max_sequence_length=4096, embeddings=embeddings):
     "helper: construct a models form hyper parameters"
