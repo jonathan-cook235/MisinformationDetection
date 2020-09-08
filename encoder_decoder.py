@@ -14,7 +14,8 @@ import numpy as np
 from dynamic_graph.TGS_utils import get_neighbor_finder, NeighborFinder
 from dynamic_graph.embedding_module import get_embedding_module
 from dynamic_graph.time_encoding import TimeEncoder
-# from SAHP.sahp import SAHP
+from SAHP.sahp import SAHP
+from SAHP.train_sahp import MaskBatch
 
 
 import torch_geometric.nn as pyg_nn
@@ -263,7 +264,8 @@ class Timestamp_Pred(nn.Module):
         output : timestamp prediction.
 
         """
-        timestamps = batch.t
-        position_embedding = x
-        model = SAHP
-        model.forward(timestamps, position_embedding, src_mask)
+        model = make_model(nLayers=6, d_model=128, atten_heads=8, dropout=0.1, process_dim=10,
+                           device='cpu', pe='concat', max_sequence_length=4096, embeddings=x)
+        src_mask = MaskBatch(x,pad=model.process_dim, device='cpu')
+
+        model.forward(batch.t, x, src_mask)
