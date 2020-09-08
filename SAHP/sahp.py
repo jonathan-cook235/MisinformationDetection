@@ -67,11 +67,11 @@ class SAHP(nn.Module):
         cell_t = torch.tanh(converge_point + (start_point - converge_point) * torch.exp(- omega * duration_t))
         return cell_t
 
-    def forward(self, seq_dt, x, src_mask):
+    def forward(self, seq_dt, src_mask):
         # type_embedding = self.type_emb(seq_types) * math.sqrt(self.d_model)  #
         # position_embedding = self.position_emb
         #
-        # x = position_embedding
+        x = self.position_emb
         for i in range(self.nLayers):
             x = self.input_sublayer(x, lambda _x: self.attention.forward(_x, _x, _x, mask=src_mask))
             x = self.dropout(self.output_sublayer(x, self.feed_forward))
