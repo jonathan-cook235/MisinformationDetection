@@ -54,9 +54,9 @@ def train(dataset, args):
     print("Dimension of hidden space", args.hidden_dim)
 
     # Dynamic graph model
-    # model = make_model(dataset_builder.num_node_features, dataset_builder.num_classes, args, device)
+    model = make_model(dataset_builder.num_node_features, dataset_builder.num_classes, args, device)
     # static graph model
-    model = GNNStack(dataset_builder.num_node_features, args.hidden_dim, dataset_builder.num_classes, args)
+    # model = GNNStack(dataset_builder.num_node_features, args.hidden_dim, dataset_builder.num_classes, args)
     if on_gpu:
         model.cuda()
 
