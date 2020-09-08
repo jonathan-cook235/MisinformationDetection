@@ -212,6 +212,8 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Train the graph network.')
     parser.add_argument('--dataset', choices=["twitter15", "twitter16"],
                     help='Training dataset', default="twitter15")
+    parser.add_argument('--graph_type', choices=["static_graph", "dynamic_graph"],
+                        help='Training dataset', default="static_graph")
     parser.add_argument('--lr', default=0.01, type=float,
                     help='learning rate')
     parser.add_argument('--num_epochs', default=200, type=int, 
