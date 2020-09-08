@@ -36,7 +36,8 @@ def train(dataset, args):
     if True:
         dataset_builder = DatasetBuilder(dataset, only_binary=args.only_binary, features_to_consider=args.features,
                                         time_cutoff=time_cutoff, seed=args.seed)
-        datasets = dataset_builder.create_dataset(standardize_features=args.standardize,
+        datasets = dataset_builder.create_dataset(dataset_type="dynamic_graph",
+                                                  standardize_features=args.standardize,
                                                 on_gpu=on_gpu, oversampling_ratio=args.oversampling_ratio)
         # with open(dataset_file, 'wb') as f:
         #     pickle.dump(datasets, f, pickle.HIGHEST_PROTOCOL)

@@ -462,12 +462,17 @@ class DatasetBuilder:
                     x.to(torch.device("cuda"))
                     edge_index.to(torch.device("cuda"))
                     t.to(torch.device("cuda"))
-                for snapshot in node_features:
-                    data_point = torch_geometric.data.Data(x=x, y=y, t=t, edge_index=edge_index, sources=sources, destinations=destinations)
-                    if on_gpu:
-                        data_point.to(torch.device("cuda"))
-                    dataset[ids_to_dataset[news_id]].append(data_point)
-                # dynamic_dataset[ids_to_dataset[news_id]].append(dataset) #Only added line to the static graph approach
+                data_point = torch_geometric.data.Data(x=x, y=y, t=t, edge_index=edge_index, sources=sources,
+                                                        destinations=destinations)
+                if on_gpu:
+                    data_point.to(torch.device("cuda"))
+                dataset[ids_to_dataset[news_id]].append(data_point)
+
+                # for snapshot in node_features:
+                #     data_point = torch_geometric.data.Data(x=x, y=y, t=t, edge_index=edge_index, sources=sources, destinations=destinations)
+                #     if on_gpu:
+                #         data_point.to(torch.device("cuda"))
+                #     dataset[ids_to_dataset[news_id]].append(data_point)
 
             elif dataset_type == "sequential":
                 y = util.to_label(label)
