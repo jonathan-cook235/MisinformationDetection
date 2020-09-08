@@ -11,10 +11,11 @@ import torch.nn as nn
 import torch.nn.functional as F
 import numpy as np
 
-from TGS_utils import get_neighbor_finder, NeighborFinder
-from embedding_module import get_embedding_module
-from time_encoding import TimeEncode
-from sahp import SAHP
+from dynamic_graph.TGS_utils import get_neighbor_finder, NeighborFinder
+from dynamic_graph.embedding_module import get_embedding_module
+from dynamic_graph.time_encoding import TimeEncoder
+# from SAHP.sahp import SAHP
+
 
 import torch_geometric.nn as pyg_nn
 
@@ -41,8 +42,9 @@ def make_model(n_node_features, output_dim, args, device):  # hyperparameters to
     timestamp_predictor = Timestamp_Pred(input_dim=n_node_features, hidden_dim=args.hidden_dim,
                             output_dim=output_dim, args=args)
     model = EncoderDecoder(encoder = tgs_encoder,
-        decoder1 = veracity_predictor, decoder2 = timestamp_predictor
-        )
+                           decoder1 = veracity_predictor,
+                           decoder2 = timestamp_predictor
+                           )
 
     # This was important from their code.
     # Initialize parameters with Glorot / fan_avg.
@@ -65,7 +67,12 @@ class EncoderDecoder(nn.Module):
         
     def forward(self, data):
         node_embeddings = self.encode(data)
-        return self.decode(node_embeddings, data.batch)
+        veracity_pred_loss  = self.decode1(node_embeddings, data.batch)
+        time_pred_loss = self.decode2(node_embeddings, data.batch)
+
+        total_loss = veracity_pred_loss + time_pred_loss
+
+        return total_loss
     
     def encode(self, data):
         return self.encoder(data)
@@ -114,7 +121,7 @@ class TGS(nn.Module):
         self.embedding_dimension = self.n_node_features
 
         # self.time_encoder = TimeEncode(dimension=self.n_node_features)
-        self.time_encoder = TimeEncode(dimension=self.n_time_features)
+        self.time_encoder = TimeEncoder(dimension=self.n_time_features)
 
         self.embedding_module = get_embedding_module(module_type=embedding_module_type,
                                                      # node_features=self.node_features,
@@ -207,7 +214,7 @@ class Veracity_Pred(nn.Module):
 
         Parameters
         ----------
-        hidden : hidden representation of nodes from TGS encoder.
+        hidden : hidden representation of nodes from dynamic_graph encoder.
 
         Returns
         -------
@@ -249,7 +256,7 @@ class Timestamp_Pred(nn.Module):
 
         Parameters
         ----------
-        hidden : hidden representation of nodes from TGS encoder.
+        hidden : hidden representation of nodes from dynamic_graph encoder.
 
         Returns
         -------

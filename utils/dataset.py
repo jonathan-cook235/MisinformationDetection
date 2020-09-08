@@ -8,8 +8,8 @@ import pandas as pd
 import torch
 import pickle
 
-import utils
-from text_preprocessing import preprocess_tweets
+from utils import util
+from utils.text_preprocessing import preprocess_tweets
 
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler
@@ -35,7 +35,7 @@ def get_user_and_tweet_ids_in_train(trees_to_parse, train_ids):
     user_ids_in_train = set()
     tweet_ids_in_train = set()
     for tree_file_name in trees_to_parse:
-        news_id = utils.get_root_id(tree_file_name)
+        news_id = util.get_root_id(tree_file_name)
         if news_id in train_ids:
             with open(tree_file_name, "rt") as tree_file:
                 int_node_dict = {}
@@ -44,7 +44,7 @@ def get_user_and_tweet_ids_in_train(trees_to_parse, train_ids):
                 for line in tree_file.readlines():
                     if "ROOT" in line:
                         continue
-                    tweet_in, tweet_out, user_in, user_out, _, _ = utils.parse_edge_line(line)
+                    tweet_in, tweet_out, user_in, user_out, _, _ = util.parse_edge_line(line)
                     user_ids_in_train.add(user_in)  # user_ids_in_train may be bigger
                     user_ids_in_train.add(user_out)
                     tweet_ids_in_train.add(tweet_in)
@@ -175,7 +175,7 @@ def preprocess_user_features(user_features, user_ids_in_train, standardize_featu
 
         if "created_at" in features:
             new_features['created_at'] = \
-                utils.from_date_text_to_timestamp(features['created_at'])
+                util.from_date_text_to_timestamp(features['created_at'])
 
         integer_features = [
             "favourites_count",
@@ -364,7 +364,7 @@ class DatasetBuilder:
 
         start_time = time.time()
 
-        trees_to_parse = utils.get_tree_file_names(self.dataset_dir)
+        trees_to_parse = util.get_tree_file_names(self.dataset_dir)
 
         labels = load_labels(self.dataset_dir)
 
@@ -416,7 +416,7 @@ class DatasetBuilder:
         trees = []
 
         for tree_file_name in trees_to_parse:
-            news_id = utils.get_root_id(tree_file_name)
+            news_id = util.get_root_id(tree_file_name)
             label = labels[news_id]
             if (not self.only_binary) or (label in ['false', 'true']):
                 node_features, timestamps, edges, sources, destinations = \
@@ -432,7 +432,7 @@ class DatasetBuilder:
             if dataset_type == "graph":
                 import torch_geometric
                 x = torch.tensor(node_features, dtype=torch.float32)
-                y = torch.tensor(utils.to_label(label))
+                y = torch.tensor(util.to_label(label))
                 edge_index = np.array([edge[:2] for edge in edges],
                                       dtype=int)  # change if you want the time somewhere
                 edge_index = torch.tensor(edge_index).t().contiguous()
@@ -453,7 +453,7 @@ class DatasetBuilder:
                 import torch_geometric
                 x = torch.tensor(node_features, dtype=torch.float32)
                 t = torch.tensor(timestamps, dtype=torch.float32)
-                y = torch.tensor(utils.to_label(label))
+                y = torch.tensor(util.to_label(label))
                 edge_index = np.array([edge[:2] for edge in edges],
                                       dtype=int)  # change if you want the time somewhere
                 edge_index = torch.tensor(edge_index).t().contiguous()
@@ -470,7 +470,7 @@ class DatasetBuilder:
                 # dynamic_dataset[ids_to_dataset[news_id]].append(dataset) #Only added line to the static graph approach
 
             elif dataset_type == "sequential":
-                y = utils.to_label(label)
+                y = util.to_label(label)
                 sequential_data = np.array(
                     node_features)  # If we go for this one, returns the features of the successive new tweet-user tuples encountered over time
                 dataset[ids_to_dataset[news_id]].append([sequential_data, y])
@@ -512,7 +512,7 @@ class DatasetBuilder:
         time_shift = 0
         with open(tree_file_name, "rt") as tree_file:
             for line in tree_file.readlines():
-                tweet_in, tweet_out, user_in, user_out, _, time_out = utils.parse_edge_line(line)
+                tweet_in, tweet_out, user_in, user_out, _, time_out = util.parse_edge_line(line)
                 if time_out < 0 and time_shift == 0:
                     # if buggy dataset, and we haven't found the time_shift yet
                     time_shift = -time_out
@@ -535,7 +535,7 @@ class DatasetBuilder:
                 if 'ROOT' in line:
                     continue
 
-                tweet_in, tweet_out, user_in, user_out, _, time_out = utils.parse_edge_line(line)
+                tweet_in, tweet_out, user_in, user_out, _, time_out = util.parse_edge_line(line)
                 time_out += time_shift  # fix buggy dataset
                 assert time_out >= 0
 

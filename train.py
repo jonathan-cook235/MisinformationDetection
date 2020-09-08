@@ -6,8 +6,10 @@ import torch_geometric
 from torch.utils.tensorboard import SummaryWriter
 from torch_geometric.datasets import TUDataset
 import argparse
+
+from static_graph import FirstNet, GNNStack
 from encoder_decoder import make_model
-from dataset import DatasetBuilder
+from utils.dataset import DatasetBuilder
 import numpy as np
 import csv
 import pickle
@@ -51,10 +53,10 @@ def train(dataset, args):
     print("Number of node features", dataset_builder.num_node_features)
     print("Dimension of hidden space", args.hidden_dim)
 
-    # Setting up model
-    model = make_model(dataset_builder.num_node_features, dataset_builder.num_classes, args, device)
-    # model = make_model(dataset_builder.num_node_features, args.hidden_dim, args.hidden_dim, dataset_builder.num_classes, args)
-    # model = TGS_stack(dataset.num_node_features, 32, dataset.num_classes, args)
+    # Dynamic graph model
+    # model = make_model(dataset_builder.num_node_features, dataset_builder.num_classes, args, device)
+    # static graph model
+    model = GNNStack(dataset_builder.num_node_features, args.hidden_dim, dataset_builder.num_classes, args)
     if on_gpu:
         model.cuda()
 
@@ -114,7 +116,7 @@ def train(dataset, args):
             train_writer.add_scalar("loss", loss.mean(), global_step)
             global_step += 1
 
-            if i_batch % 10 == 0:
+            if i_batch % 100 == 0:
                 print('batch-', i_batch, loss.mean().item())# 22240 * 8
 
         print("epoch", epoch, "loss:", epoch_loss / len(train_data_loader))
@@ -236,7 +238,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Train the graph network.')
     parser.add_argument('--dataset', choices=["twitter15", "twitter16"],
                     help='Training dataset', default="twitter15")
-    parser.add_argument('--lr', default=0.0001, type=float,
+    parser.add_argument('--lr', default=0.01, type=float,
                     help='learning rate')
     parser.add_argument('--num_epochs', default=200, type=int, 
                     help='Number of epochs')
@@ -246,8 +248,8 @@ if __name__ == "__main__":
     #                 help='Number of layers')
     # parser.add_argument('--dropout', default=0.0, type=float,
     #                 help='dropout for TGS_stack')
-    # parser.add_argument('--model_type', default="GAT",
-    #                 help='Model type for TGS_stack')
+    parser.add_argument('--model_type', default="GAT",
+                    help='Model type for TGS_stack')
     parser.add_argument('--batch_size', default=32, type=int,
                     help='Batch_size')
     parser.add_argument('--only_binary', action='store_true',
@@ -269,7 +271,7 @@ if __name__ == "__main__":
     parser.add_argument('--n_degree', type=int, default=5, help='Number of neighbors to sample')
     parser.add_argument('--n_head', type=int, default=2, help='Number of heads used in attention layer')
     # parser.add_argument('--n_epoch', type=int, default=50, help='Number of epochs')
-    parser.add_argument('--n_layer', type=int, default=1, help='Number of network layers')
+    parser.add_argument('--n_layer', type=int, default=2, help='Number of network layers')
     # parser.add_argument('--lr', type=float, default=0.0001, help='Learning rate')
     parser.add_argument('--patience', type=int, default=5, help='Patience for early stopping')
     # parser.add_argument('--n_runs', type=int, default=1, help='Number of runs')
