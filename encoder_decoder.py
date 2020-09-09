@@ -14,8 +14,9 @@ import numpy as np
 from dynamic_graph.TGS_utils import get_neighbor_finder, NeighborFinder
 from dynamic_graph.embedding_module import get_embedding_module
 from dynamic_graph.time_encoding import TimeEncoder
-from SAHP.sahp import SAHP
-from SAHP.train_sahp import MaskBatch
+
+from point_process.sahp import SAHP
+from point_process.train_sahp import MaskBatch,make_sahp_model
 
 
 import torch_geometric.nn as pyg_nn
@@ -40,7 +41,9 @@ def make_model(n_node_features, output_dim, args, device):  # hyperparameters to
         )
     veracity_predictor =  Veracity_Pred(input_dim=n_node_features, hidden_dim=args.hidden_dim,
                         output_dim=output_dim, args=args)
-    timestamp_predictor = Timestamp_Pred(input_dim=n_node_features, hidden_dim=args.hidden_dim,
+    sahp_model = make_sahp_model(nLayers=6, d_model=128, atten_heads=8, dropout=0.1, process_dim=10,
+                       device='cpu', pe='concat', max_sequence_length=4096)
+    timestamp_predictor = Timestamp_Pred(tpp=sahp_model,input_dim=n_node_features, hidden_dim=args.hidden_dim,
                             output_dim=output_dim, args=args)
     model = EncoderDecoder(encoder = tgs_encoder,
                            decoder1 = veracity_predictor,
@@ -241,7 +244,7 @@ class Veracity_Pred(nn.Module):
 
 class Timestamp_Pred(nn.Module):
 
-    def __init__(self, input_dim, hidden_dim, output_dim, args):
+    def __init__(self, tpp, input_dim, hidden_dim, output_dim, args):
         """
         Decoder for timestamp prediction
 
@@ -251,6 +254,8 @@ class Timestamp_Pred(nn.Module):
 
         self.input_dim = input_dim
         self.hidden_dim = hidden_dim
+
+        self.tpp = tpp
 
     def forward(self, x, batch):
         """
@@ -264,8 +269,7 @@ class Timestamp_Pred(nn.Module):
         output : timestamp prediction.
 
         """
-        model = make_model(nLayers=6, d_model=128, atten_heads=8, dropout=0.1, process_dim=10,
-                           device='cpu', pe='concat', max_sequence_length=4096, embeddings=x)
-        src_mask = MaskBatch(x,pad=model.process_dim, device='cpu')
 
-        model.forward(batch.t, x, src_mask)
+        src_mask = MaskBatch(x,pad=self.tpp.process_dim, device='cpu')
+
+        self.tpp.forward(batch.t, x, src_mask)

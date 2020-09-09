@@ -36,7 +36,16 @@ def train(dataset, args):
     if True:
         dataset_builder = DatasetBuilder(dataset, only_binary=args.only_binary, features_to_consider=args.features,
                                         time_cutoff=time_cutoff, seed=args.seed)
-        datasets = dataset_builder.create_dataset(dataset_type="dynamic_graph",
+        if args.graph_type == 'static':
+            # static graph model
+            dataset_type = 'graph'
+        elif args.graph_type == 'dynamic':
+            # Dynamic graph model
+            dataset_type = 'dynamic_graph'
+        else:
+            print('Wrong graph_type')
+
+        datasets = dataset_builder.create_dataset(dataset_type=dataset_type,
                                                   standardize_features=args.standardize,
                                                 on_gpu=on_gpu, oversampling_ratio=args.oversampling_ratio)
         # with open(dataset_file, 'wb') as f:
@@ -54,10 +63,18 @@ def train(dataset, args):
     print("Number of node features", dataset_builder.num_node_features)
     print("Dimension of hidden space", args.hidden_dim)
 
-    # Dynamic graph model
-    model = make_model(dataset_builder.num_node_features, dataset_builder.num_classes, args, device)
-    # static graph model
-    # model = GNNStack(dataset_builder.num_node_features, args.hidden_dim, dataset_builder.num_classes, args)
+    if args.graph_type == 'static':
+        # static graph model
+        model = GNNStack(dataset_builder.num_node_features, args.hidden_dim, dataset_builder.num_classes, args)
+        # our implementations epoch 999, loss: 0.7059342861175537, Training accuracy: 0.6981, Validation accuracy: 0.5106, Test accuracy: 0.4895
+        # orignal implementa  epoch 999, loss: 0.1823281928558241, Training accuracy: 0.9313, Validation accuracy: 0.4468, Test accuracy: 0.5000
+
+    elif args.graph_type == 'dynamic':
+        # Dynamic graph model
+        model = make_model(dataset_builder.num_node_features, dataset_builder.num_classes, args, device)
+    else:
+        print('Wrong graph_type')
+
     if on_gpu:
         model.cuda()
 
@@ -117,8 +134,8 @@ def train(dataset, args):
             train_writer.add_scalar("loss", loss.mean(), global_step)
             global_step += 1
 
-            if i_batch % 100 == 0:
-                print('batch-', i_batch, loss.mean().item())# 22240 * 8
+            # if i_batch % 100 == 0:
+            #     print('batch-', i_batch, loss.mean().item())# 22240 * 8
 
         print("epoch", epoch, "loss:", epoch_loss / len(train_data_loader))
         if epoch%1==0:
@@ -241,7 +258,7 @@ if __name__ == "__main__":
                     help='Training dataset', default="twitter15")
     parser.add_argument('--lr', default=0.01, type=float,
                     help='learning rate')
-    parser.add_argument('--num_epochs', default=200, type=int, 
+    parser.add_argument('--num_epochs', default=1000, type=int,
                     help='Number of epochs')
     parser.add_argument('--oversampling_ratio', default=1, type=int, 
                     help='Oversampling ratio for data augmentation')
@@ -249,7 +266,9 @@ if __name__ == "__main__":
     #                 help='Number of layers')
     # parser.add_argument('--dropout', default=0.0, type=float,
     #                 help='dropout for TGS_stack')
-    parser.add_argument('--model_type', default="GAT",
+    parser.add_argument('--graph_type', choices=["static", "dynamic"],default="dynamic",
+                        help='Graph type for propagation modeling')
+    parser.add_argument('--model_type', choices=['GCN', 'GAT', 'GraphSage'],default="GCN",
                     help='Model type for TGS_stack')
     parser.add_argument('--batch_size', default=32, type=int,
                     help='Batch_size')
