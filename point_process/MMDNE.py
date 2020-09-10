@@ -15,6 +15,8 @@ import numpy as np
 import sys
 from DataHelper import DataHelper
 from Evaluation import Evaluation
+from multi_head import MultiHeadedAttention
+from sublayer import SublayerConnection
 import os
 import glob
 
@@ -47,8 +49,12 @@ class MMDNE:
 
         self.epsilon = epsilon
 
-        from sahp_runner import sahp_runner
-        self.sahp = sahp_runner
+        self.attention = MultiHeadedAttention(h=self.neg_size, d_model=self.emb_size)
+        self.nlayers = 6
+        self.feed_forward = PositionwiseFeedForward(d_model=self.emb_size, d_ff=self.emb_size * 4, dropout=0.1)
+        self.input_sublayer = SublayerConnection(size=self.emb_size, dropout=0.1)
+        self.output_sublayer = SublayerConnection(size=self.emb_size, dropout=0.1)
+        self.dropout = nn.Dropout(p=0.1)
 
         print ('dataset helper...')
         self.data = DataHelper(tree_file_name, neg_size, hist_len, directed, tlp_flag=self.tlp_flag, trend_pred_flag=self.trend_prediction)
@@ -135,41 +141,43 @@ class MMDNE:
         d_time_t = torch.abs(e_times.unsqueeze(1) - t_h_times)  # (batch, hist_len)
 
         # GAT attention_rewrite
-        for i in range(self.hist_len):
-            s_h_node_emb_i = torch.transpose(s_h_node_emb[:, i:(i + 1), :], dim0=1, dim1=2).squeeze()  # (b, dim)
-            s_node_emb_i = s_node_emb  # (b, dim)
-            d_time_s_i = Variable(d_time_s)[:,i:(i+1)]  # (b,1)
-            if i == 0:
-                a_input = torch.cat([torch.mm(s_node_emb_i, self.W),torch.mm(s_h_node_emb_i, self.W)],dim=1)  # (b, 2*dim)
-                sim_s_s_his = self.leakyrelu(torch.exp(-delta_s * d_time_s_i) * torch.mm(a_input, self.a))  # (b.dim)
-            else:
-                a_input = torch.cat([torch.mm(s_node_emb_i, self.W),torch.mm(s_h_node_emb_i, self.W)],dim=1)
-                sim_s_s_his = torch.cat([sim_s_s_his,
-                                         self.leakyrelu(torch.exp(-delta_s * d_time_s_i) * torch.mm(a_input, self.a))], dim=1)
+        # for i in range(self.hist_len):
+        #     s_h_node_emb_i = torch.transpose(s_h_node_emb[:, i:(i + 1), :], dim0=1, dim1=2).squeeze()  # (b, dim)
+        #     s_node_emb_i = s_node_emb  # (b, dim)
+        #     d_time_s_i = Variable(d_time_s)[:,i:(i+1)]  # (b,1)
+        #     if i == 0:
+        #         a_input = torch.cat([torch.mm(s_node_emb_i, self.W),torch.mm(s_h_node_emb_i, self.W)],dim=1)  # (b, 2*dim)
+        #         sim_s_s_his = self.leakyrelu(torch.exp(-delta_s * d_time_s_i) * torch.mm(a_input, self.a))  # (b.dim)
+        #     else:
+        #         a_input = torch.cat([torch.mm(s_node_emb_i, self.W),torch.mm(s_h_node_emb_i, self.W)],dim=1)
+        #         sim_s_s_his = torch.cat([sim_s_s_his,
+        #                                  self.leakyrelu(torch.exp(-delta_s * d_time_s_i) * torch.mm(a_input, self.a))], dim=1)
+        #
+        # for i in range(self.hist_len):
+        #     t_h_node_emb_i = torch.transpose(t_h_node_emb[:, i:(i + 1), :], dim0=1, dim1=2).squeeze()
+        #     t_node_emb_i = t_node_emb
+        #     d_time_t_i = Variable(d_time_t)[:, i:(i + 1)]  # (b,1)
+        #     if i == 0:
+        #         a_input = torch.cat([torch.mm(t_node_emb_i, self.W), torch.mm(t_h_node_emb_i, self.W)],
+        #                             dim=1)  # (b, 2*dim)
+        #         sim_t_t_his = self.leakyrelu(torch.exp(-delta_s * d_time_t_i) * torch.mm(a_input, self.a))  # (b, 1)
+        #     else:
+        #         a_input = torch.cat([torch.mm(t_node_emb_i, self.W), torch.mm(t_h_node_emb_i, self.W)], dim=1)
+        #         sim_t_t_his = torch.cat([sim_t_t_his,
+        #                                  self.leakyrelu(torch.exp(-delta_s * d_time_t_i) * torch.mm(a_input, self.a))],
+        #                                 dim=1)
+        #
+        # att_s_his_s = softmax(sim_s_s_his, dim=1)  # (batch, h)
+        # att_t_his_t = softmax(sim_t_t_his, dim=1)  # (batch, h)
+        #
+        # s_his_hat_emb_inter = ((att_s_his_s * Variable(s_h_time_mask)).unsqueeze(2) *
+        #                        torch.mm(s_h_node_emb.view(s_h_node_emb.size()[0] * self.hist_len, -1), self.W).
+        #                        view(s_h_node_emb.size()[0],self.hist_len,-1)).sum(dim=1)  # (b,dim)
+        # t_his_hat_emb_inter = ((att_t_his_t * Variable(t_h_time_mask)).unsqueeze(2) *
+        #                        torch.mm(t_h_node_emb.view(t_h_node_emb.size()[0] * self.hist_len, -1), self.W).
+        #                        view(t_h_node_emb.size()[0],self.hist_len,-1)).sum(dim=1)
 
-        for i in range(self.hist_len):
-            t_h_node_emb_i = torch.transpose(t_h_node_emb[:, i:(i + 1), :], dim0=1, dim1=2).squeeze()
-            t_node_emb_i = t_node_emb
-            d_time_t_i = Variable(d_time_t)[:, i:(i + 1)]  # (b,1)
-            if i == 0:
-                a_input = torch.cat([torch.mm(t_node_emb_i, self.W), torch.mm(t_h_node_emb_i, self.W)],
-                                    dim=1)  # (b, 2*dim)
-                sim_t_t_his = self.leakyrelu(torch.exp(-delta_s * d_time_t_i) * torch.mm(a_input, self.a))  # (b, 1)
-            else:
-                a_input = torch.cat([torch.mm(t_node_emb_i, self.W), torch.mm(t_h_node_emb_i, self.W)], dim=1)
-                sim_t_t_his = torch.cat([sim_t_t_his,
-                                         self.leakyrelu(torch.exp(-delta_s * d_time_t_i) * torch.mm(a_input, self.a))],
-                                        dim=1)
-
-        att_s_his_s = softmax(sim_s_s_his, dim=1)  # (batch, h)
-        att_t_his_t = softmax(sim_t_t_his, dim=1)  # (batch, h)
-
-        s_his_hat_emb_inter = ((att_s_his_s * Variable(s_h_time_mask)).unsqueeze(2) *
-                               torch.mm(s_h_node_emb.view(s_h_node_emb.size()[0] * self.hist_len, -1), self.W).
-                               view(s_h_node_emb.size()[0],self.hist_len,-1)).sum(dim=1)  # (b,dim)
-        t_his_hat_emb_inter = ((att_t_his_t * Variable(t_h_time_mask)).unsqueeze(2) *
-                               torch.mm(t_h_node_emb.view(t_h_node_emb.size()[0] * self.hist_len, -1), self.W).
-                               view(t_h_node_emb.size()[0],self.hist_len,-1)).sum(dim=1)
+        att_his = self.attention.forward(s_node_emb,)
 
         # temporal-self-attention
         global_att = softmax(torch.tanh(self.global_att_linear_layer(torch.transpose(
