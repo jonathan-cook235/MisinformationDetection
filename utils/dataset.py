@@ -519,16 +519,19 @@ class DatasetBuilder:
         time_shift = 0
         with open(tree_file_name, "rt") as tree_file:
             for line in tree_file.readlines():
-                tweet_in, tweet_out, user_in, user_out, _, time_out = util.parse_edge_line(line)
+                tweet_in, tweet_out, user_in, user_out, time_in, time_out = util.parse_edge_line(line)
+                time_interval = np.abs(time_out - time_in)  # buggy
+                assert time_interval >= 0
                 if time_out < 0 and time_shift == 0:
                     # if buggy dataset, and we haven't found the time_shift yet
                     time_shift = -time_out
                 if "ROOT" in line:
                     node_id_to_count[(tweet_out, user_out)] = 0
+                    ## MODIFICATIONS ## time_interval relaces time_out
                     self.add_node_features_to_x(x, node_id_to_count, tweet_out, user_out, 
-                                                tweet_fts, user_fts, time_out)
+                                                tweet_fts, user_fts, time_interval)
                     ## MODIFICATIONS ## t, should be time-shift not time-out?
-                    t.append(time_out)
+                    t.append(time_interval)
 
                     count += 1
                     break
@@ -544,7 +547,10 @@ class DatasetBuilder:
                 if 'ROOT' in line:
                     continue
 
-                tweet_in, tweet_out, user_in, user_out, _, time_out = util.parse_edge_line(line)
+                tweet_in, tweet_out, user_in, user_out, time_in, time_out = util.parse_edge_line(line)
+                time_interval = np.abs(time_out - time_in) # buggy
+                assert time_interval >= 0
+                # print('time_in', time_in, 'timeout', time_out, 'time_interval', time_interval)
                 time_out += time_shift  # fix buggy dataset
                 assert time_out >= 0
 
@@ -553,10 +559,11 @@ class DatasetBuilder:
                     # Add dest if unseen. First line with ROOT adds the original tweet.
                     if (tweet_out, user_out) not in node_id_to_count:
                         node_id_to_count[(tweet_out, user_out)] = count
+                        ## MODIFICATIONS ## time_interval relaces time_out
                         self.add_node_features_to_x(x, node_id_to_count, tweet_out, user_out, 
-                                                    tweet_fts, user_fts, time_out)
-                        ## MODIFICATIONS ## t, should be time-shift not time-out?
-                        t.append(time_out)
+                                                    tweet_fts, user_fts, time_interval)
+                        ## MODIFICATIONS ## t, should be time-interval not time-out?
+                        t.append(time_interval)
                         count += 1
 
                     # Remove some buggy lines (i.e. duplicated or make no sense)
@@ -570,7 +577,7 @@ class DatasetBuilder:
                         ]
                         ## MODIFICATIONS ## sources, destinations
                         sources.append((node_id_to_count[(tweet_in, user_in)], 
-                                        potential_edge[:2], time_out))
+                                        potential_edge[:2], time_in))
                         destinations.append((node_id_to_count[(tweet_out, user_out)], 
                                             potential_edge[:2], time_out))
                         

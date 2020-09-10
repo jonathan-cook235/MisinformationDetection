@@ -275,7 +275,7 @@ if __name__ == "__main__":
     #                 help='Number of layers')
     # parser.add_argument('--dropout', default=0.0, type=float,
     #                 help='dropout for TGS_stack')
-    parser.add_argument('--graph_type', choices=["static", "dynamic"],default="static",
+    parser.add_argument('--graph_type', choices=["static", "dynamic"],default="dynamic",
                         help='Graph type for propagation modeling')
     parser.add_argument('--model_type', choices=['GCN', 'GAT', 'GraphSage'],default="GCN",
                     help='Model type for TGS_stack')

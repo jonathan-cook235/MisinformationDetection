@@ -15,7 +15,7 @@ from dynamic_graph.TGS_utils import get_neighbor_finder, NeighborFinder
 from dynamic_graph.embedding_module import get_embedding_module
 from dynamic_graph.time_encoding import TimeEncoder
 
-from point_process.sahp import SAHP
+# from point_process.sahp import SAHP
 from point_process.train_sahp import MaskBatch,make_sahp_model
 
 
@@ -43,11 +43,12 @@ def make_model(n_node_features, output_dim, args, device):  # hyperparameters to
                         output_dim=output_dim, args=args)
     sahp_model = make_sahp_model(nLayers=6, d_model=128, atten_heads=8, dropout=0.1, process_dim=10,
                        device='cpu', pe='concat', max_sequence_length=4096)
-    timestamp_predictor = Timestamp_Pred(tpp=sahp_model,input_dim=n_node_features, hidden_dim=args.hidden_dim,
-                            output_dim=output_dim, args=args)
+    # timestamp_predictor = TemporalModelling(tpp=sahp_model,input_dim=n_node_features, hidden_dim=args.hidden_dim,
+    #                         output_dim=output_dim, args=args)
     model = EncoderDecoder(encoder = tgs_encoder,
                            decoder1 = veracity_predictor,
-                           decoder2 = timestamp_predictor
+                           # decoder2 = timestamp_predictor
+                           decoder2 = sahp_model
                            )
 
     # This was important from their code.
@@ -66,15 +67,15 @@ class EncoderDecoder(nn.Module):
     def __init__(self, encoder, decoder1, decoder2):
         super(EncoderDecoder, self).__init__()
         self.encoder = encoder
-        self.decoder1 = decoder1
-        self.decoder2 = decoder2
+        self.veracity_decoder = decoder1
+        self.temporal_decoder = decoder2
         
     def forward(self, data):
         node_embeddings = self.encode(data)
         veracity_pred_loss  = self.decode1(node_embeddings, data.batch)
-        # time_pred_loss = self.decode2(node_embeddings, data.batch)
+        temporal_nll = self.decode2(node_embeddings, data.batch)
 
-        total_loss = veracity_pred_loss #+ time_pred_loss
+        total_loss = veracity_pred_loss + temporal_nll
 
         return total_loss
     
@@ -82,10 +83,11 @@ class EncoderDecoder(nn.Module):
         return self.encoder(data)
     
     def decode1(self, source_embedding, batch):
-        return self.decoder1(source_embedding, batch)
+        return self.veracity_decoder(source_embedding, batch)
 
     def decode2(self, source_embedding, batch):
-        return self.decoder2(source_embedding, batch)
+        src_mask = MaskBatch(source_embedding, pad=self.temporal_decoder.process_dim, device='cpu')
+        return self.temporal_decoder(batch.t, source_embedding, src_mask)
     
 class TGS(nn.Module):
     
@@ -242,34 +244,34 @@ class Veracity_Pred(nn.Module):
 
         return F.log_softmax(x, dim=1)
 
-class Timestamp_Pred(nn.Module):
-
-    def __init__(self, tpp, input_dim, hidden_dim, output_dim, args):
-        """
-        Decoder for timestamp prediction
-
-        """
-        super(Timestamp_Pred, self).__init__()
-        self.dropout = float(args.dropout)
-
-        self.input_dim = input_dim
-        self.hidden_dim = hidden_dim
-
-        self.tpp = tpp
-
-    def forward(self, x, batch):
-        """
-
-        Parameters
-        ----------
-        hidden : hidden representation of nodes from dynamic_graph encoder.
-
-        Returns
-        -------
-        output : timestamp prediction.
-
-        """
-
-        src_mask = MaskBatch(x,pad=self.tpp.process_dim, device='cpu')
-
-        self.tpp.forward(batch.t, x, src_mask)
+# class TemporalModelling(nn.Module):
+#
+#     def __init__(self, tpp, input_dim, hidden_dim, output_dim, args):
+#         """
+#         Decoder for timestamp prediction
+#
+#         """
+#         super(TemporalModelling, self).__init__()
+#         self.dropout = float(args.dropout)
+#
+#         self.input_dim = input_dim
+#         self.hidden_dim = hidden_dim
+#
+#         self.tpp = tpp
+#
+#     def forward(self, x, batch):
+#         """
+#
+#         Parameters
+#         ----------
+#         hidden : hidden representation of nodes from dynamic_graph encoder.
+#
+#         Returns
+#         -------
+#         output : timestamp prediction.
+#
+#         """
+#
+#
+#
+#         self.tpp.forward(batch.t, x, src_mask)
