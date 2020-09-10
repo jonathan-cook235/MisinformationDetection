@@ -72,9 +72,9 @@ class EncoderDecoder(nn.Module):
     def forward(self, data):
         node_embeddings = self.encode(data)
         veracity_pred_loss  = self.decode1(node_embeddings, data.batch)
-        time_pred_loss = self.decode2(node_embeddings, data.batch)
+        # time_pred_loss = self.decode2(node_embeddings, data.batch)
 
-        total_loss = veracity_pred_loss + time_pred_loss
+        total_loss = veracity_pred_loss #+ time_pred_loss
 
         return total_loss
     

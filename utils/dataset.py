@@ -411,7 +411,6 @@ class DatasetBuilder:
         ids_to_dataset.update({news_id: 'test' for news_id in test_ids})
 
         dataset = {'train': [], 'val': [], 'test': []}
-        # dynamic_dataset = {'train': [], 'val': [], 'test': []}
 
         trees = []
 
@@ -419,6 +418,7 @@ class DatasetBuilder:
             news_id = util.get_root_id(tree_file_name)
             label = labels[news_id]
             if (not self.only_binary) or (label in ['false', 'true']):
+                ## MODIFICATIONS ## add sources, destinations
                 node_features, timestamps, edges, sources, destinations = \
                     self.build_tree(tree_file_name,
                                     tweet_fts=preprocessed_tweet_fts,
@@ -427,6 +427,7 @@ class DatasetBuilder:
 
         oversample(trees, ids_to_dataset, ratio=oversampling_ratio)
 
+        ## MODIFICATIONS ##
         for news_id, label, node_features, timestamps, edges, sources, destinations in trees:
 
             if dataset_type == "graph":
@@ -468,6 +469,7 @@ class DatasetBuilder:
                     data_point.to(torch.device("cuda"))
                 dataset[ids_to_dataset[news_id]].append(data_point)
 
+                # ## MODIFICATIONS ##
                 # for snapshot in node_features:
                 #     data_point = torch_geometric.data.Data(x=x, y=y, t=t, edge_index=edge_index, sources=sources, destinations=destinations)
                 #     if on_gpu:
@@ -524,8 +526,10 @@ class DatasetBuilder:
                 if "ROOT" in line:
                     node_id_to_count[(tweet_out, user_out)] = 0
                     self.add_node_features_to_x(x, node_id_to_count, tweet_out, user_out, 
-                                                tweet_fts, user_fts)
+                                                tweet_fts, user_fts, time_out)
+                    ## MODIFICATIONS ## t, should be time-shift not time-out?
                     t.append(time_out)
+
                     count += 1
                     break
 
@@ -550,7 +554,8 @@ class DatasetBuilder:
                     if (tweet_out, user_out) not in node_id_to_count:
                         node_id_to_count[(tweet_out, user_out)] = count
                         self.add_node_features_to_x(x, node_id_to_count, tweet_out, user_out, 
-                                                    tweet_fts, user_fts)
+                                                    tweet_fts, user_fts, time_out)
+                        ## MODIFICATIONS ## t, should be time-shift not time-out?
                         t.append(time_out)
                         count += 1
 
@@ -563,6 +568,7 @@ class DatasetBuilder:
                             user_in,
                             user_out
                         ]
+                        ## MODIFICATIONS ## sources, destinations
                         sources.append((node_id_to_count[(tweet_in, user_in)], 
                                         potential_edge[:2], time_out))
                         destinations.append((node_id_to_count[(tweet_out, user_out)], 
@@ -580,11 +586,12 @@ class DatasetBuilder:
 
         return x, t, edges, sources, destinations
 
-    def add_node_features_to_x(self, x, node_id_to_count, tweet_out, user_out, tweet_fts, user_fts):
+    def add_node_features_to_x(self, x, node_id_to_count, tweet_out, user_out, tweet_fts, user_fts, time_out):
         if self.features_to_consider == "all":
             features_node = np.concatenate([
                 tweet_fts[tweet_out], 
                 user_fts[user_out],
+                np.array([time_out])## MODIFICATIONS ## time-out should be included
             ])
         elif self.features_to_consider == "text_only":
             features_node = tweet_fts[tweet_out]

@@ -23,7 +23,7 @@ from matplotlib import pyplot as plt
 class SAHP(nn.Module):
     "Generic N layer attentive Hawkes with masking"
 
-    def __init__(self, nLayers, d_model, atten_heads, dropout, process_dim, device, max_sequence_length, embeddings):
+    def __init__(self, nLayers, d_model, atten_heads, dropout, process_dim, device, max_sequence_length, embeddings=None):
         super(SAHP, self).__init__()
         self.nLayers = nLayers
         self.process_dim = process_dim
@@ -35,7 +35,7 @@ class SAHP(nn.Module):
         self.d_model = d_model
         # self.type_emb = TypeEmbedding(self.input_size, d_model, padding_idx=self.process_dim)
         # self.position_emb = BiasedPositionalEmbedding(d_model=d_model,max_len = max_sequence_length)
-        self.position_emb = embeddings
+        # self.position_emb = embeddings
 
         self.attention = MultiHeadedAttention(h=atten_heads, d_model=self.d_model)
         self.feed_forward = PositionwiseFeedForward(d_model=self.d_model, d_ff=self.d_model * 4, dropout=dropout)
@@ -67,11 +67,11 @@ class SAHP(nn.Module):
         cell_t = torch.tanh(converge_point + (start_point - converge_point) * torch.exp(- omega * duration_t))
         return cell_t
 
-    def forward(self, seq_dt, src_mask):
+    def forward(self, seq_dt, x, src_mask):
         # type_embedding = self.type_emb(seq_types) * math.sqrt(self.d_model)  #
         # position_embedding = self.position_emb
         #
-        x = self.position_emb
+        # x = self.position_emb
         for i in range(self.nLayers):
             x = self.input_sublayer(x, lambda _x: self.attention.forward(_x, _x, _x, mask=src_mask))
             x = self.dropout(self.output_sublayer(x, self.feed_forward))

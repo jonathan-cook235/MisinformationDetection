@@ -48,6 +48,7 @@ def parse_edge_line(line):
 
     time_in, time_out = float(orig_list[5]), float(dest_list[5])
 
+    # ## MODIFICATIONS ##
     #if orig_list[1] != 'ROOT':
     # s_node = int(orig_list[1])  # source node
     # t_node = int(dest_list[1])  # target node
