@@ -2,13 +2,14 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import numpy as np
+import argparse
 
 from dynamic_graph.TGS_utils import get_neighbor_finder, NeighborFinder
 from dynamic_graph.embedding_module import get_embedding_module
 from dynamic_graph.time_encoding import TimeEncoder
 
 from point_process.sahp import SAHP
-from point_process.train_sahp import MaskBatch, make_sahp_model
+from train_sahp import MaskBatch, make_sahp_model, train_eval_sahp
 
 import torch_geometric.nn as pyg_nn
 
@@ -267,3 +268,62 @@ class Timestamp_Pred(nn.Module):
         src_mask = MaskBatch(x, pad=self.tpp.process_dim, device='cpu')
 
         self.tpp.forward(batch.t, x, src_mask)
+
+        # DEFAULT_BATCH_SIZE = 32
+        # DEFAULT_HIDDEN_SIZE = 16
+        # DEFAULT_LEARN_RATE = 5e-5
+        #
+        # parser = argparse.ArgumentParser(description="Train the models.")
+        # parser.add_argument('-e', '--epochs', type=int, default=1000,
+        #                     help='number of epochs.')
+        # parser.add_argument('-b', '--batch', type=int,
+        #                     dest='batch_size', default=DEFAULT_BATCH_SIZE,
+        #                     help='batch size. (default: {})'.format(DEFAULT_BATCH_SIZE))
+        # parser.add_argument('--lr', default=DEFAULT_LEARN_RATE, type=float,
+        #                     help="set the optimizer learning rate. (default {})".format(DEFAULT_LEARN_RATE))
+        # parser.add_argument('--hidden', type=int,
+        #                     dest='hidden_size', default=DEFAULT_HIDDEN_SIZE,
+        #                     help='number of hidden units. (default: {})'.format(DEFAULT_HIDDEN_SIZE))
+        # parser.add_argument('--d-model', type=int, default=DEFAULT_HIDDEN_SIZE)
+        # parser.add_argument('--atten-heads', type=int, default=8)
+        # parser.add_argument('--pe', type=str, default='add', help='concat, add')
+        # parser.add_argument('--nLayers', type=int, default=4)
+        # parser.add_argument('--dropout', type=float, default=0.1)
+        # parser.add_argument('--cuda', type=int, default=0)
+        # parser.add_argument('--train-ratio', type=float, default=0.8,
+        #                     help='override the size of the training dataset.')
+        # parser.add_argument('--lambda-l2', type=float, default=3e-4,
+        #                     help='regularization loss.')
+        # parser.add_argument('--dev-ratio', type=float, default=0.1,
+        #                     help='override the size of the dev dataset.')
+        # parser.add_argument('--early-stop-threshold', type=float, default=1e-2,
+        #                     help='early_stop_threshold')
+        # parser.add_argument('--log-dir', type=str,
+        #                     dest='log_dir', default='logs',
+        #                     help="training logs target directory.")
+        # parser.add_argument('--save_model', default=False,
+        #                     help="do not save the models state dict and loss history.")
+        # parser.add_argument('--bias', default=False,
+        #                     help="use bias on the activation (intensity) layer.")
+        # parser.add_argument('--samples', default=10,
+        #                     help="number of samples in the integral.")
+        # parser.add_argument('-m', '--model', default='sahp',
+        #                     type=str, choices=['sahp'],
+        #                     help='choose which models to train.')
+        # parser.add_argument('-t', '--task', type=str, default='retweet',
+        #                     help='task type')
+        # args = parser.parse_args()
+        # print(args)
+        #
+        # if torch.cuda.is_available():
+        #     USE_CUDA = True
+        # else:
+        #     USE_CUDA = False
+        #
+        # params = args, process_dim, device, tmax, \
+        #          train_times_tensor, train_seq_types, train_seq_lengths, \
+        #          dev_times_tensor, dev_seq_types, dev_seq_lengths, \
+        #          test_times_tensor, test_seq_types, test_seq_lengths, \
+        #          BATCH_SIZE, EPOCHS, USE_CUDA
+        #
+        # model = train_eval_sahp(params)
