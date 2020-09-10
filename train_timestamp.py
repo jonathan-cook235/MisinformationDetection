@@ -8,6 +8,7 @@ from torch_geometric.datasets import TUDataset
 import argparse
 
 from static_graph import FirstNet, GNNStack
+import train_sahp
 from encoder_decoder import make_model
 from utils.dataset import DatasetBuilder
 import numpy as np
@@ -115,147 +116,150 @@ def train(dataset, args):
         best_val_acc = checkpoint["best_val_acc"]
         print("Restoring previous model at epoch", epoch_ckp)
 
-    # # Training phase
-    # def compute_loss(output, label):
-    #     y_1 = output[0]
-    #     y_2 = output[1]
-    #     veracity_loss = -label*np.log(y_2) - (1-label)*np.log(1 - y_1)
-    #     return veracity_loss
+    # # # Training phase
+    # # def compute_loss(output, label):
+    # #     y_1 = output[0]
+    # #     y_2 = output[1]
+    # #     veracity_loss = -label*np.log(y_2) - (1-label)*np.log(1 - y_1)
+    # #     return veracity_loss
+    # #
+    # # compute_loss = nn.CrossEntropyLoss()
+    # optimizer = torch.optim.AdamW(model.parameters(), lr=args.lr, weight_decay=5e-4)
+    # for epoch in range(epoch_ckp, epoch_ckp + args.num_epochs):
+    #     model.train()
+    #     epoch_loss = 0
+    #     for i_batch, batch in enumerate(train_data_loader):
+    #         # print(batch)
+    #         # import pdb; pdb.set_trace()
+    #         optimizer.zero_grad()
+    #         out = model(data=batch)
+    #         loss = compute_loss(out, batch.y)
+    #         epoch_loss += loss.sum().item()
     #
-    compute_loss = nn.CrossEntropyLoss()
-    optimizer = torch.optim.AdamW(model.parameters(), lr=args.lr, weight_decay=5e-4)
-    for epoch in range(epoch_ckp, epoch_ckp + args.num_epochs):
-        model.train()
-        epoch_loss = 0
-        for i_batch, batch in enumerate(train_data_loader):
-            # print(batch)
-            # import pdb; pdb.set_trace()
-            optimizer.zero_grad()
-            out = model(data=batch)
-            loss = compute_loss(out, batch.y)
-            epoch_loss += loss.sum().item()
+    #         # Optimization
+    #         loss.backward()
+    #         optimizer.step()
+    #
+    #         # TFBoard logging
+    #         train_writer.add_scalar("loss", loss.mean(), global_step)
+    #         global_step += 1
+    #
+    #         # if i_batch % 100 == 0:
+    #         #     print('batch-', i_batch, loss.mean().item())# 22240 * 8
+    #
+    #     print("epoch", epoch, "loss:", epoch_loss / len(train_data_loader))
+    #     if epoch % 1 == 0:
+    #         # Evaluation on the training set
+    #         model.eval()
+    #         correct = 0
+    #         n_samples = 0
+    #         samples_per_label = np.zeros(dataset_builder.num_classes)
+    #         pred_per_label = np.zeros(dataset_builder.num_classes)
+    #         correct_per_label = np.zeros(dataset_builder.num_classes)
+    #         with torch.no_grad():
+    #             for batch in train_data_loader:
+    #                 _, pred = model(batch).max(dim=1)
+    #                 correct += float(pred.eq(batch.y).sum().item())
+    #                 for i in range(dataset_builder.num_classes):
+    #                     batch_i = batch.y.eq(i)
+    #                     pred_i = pred.eq(i)
+    #                     samples_per_label[i] += batch_i.sum().item()
+    #                     pred_per_label[i] += pred_i.sum().item()
+    #                     correct_per_label[i] += (batch_i * pred_i).sum().item()
+    #                 n_samples += len(batch.y)
+    #         train_acc = correct / n_samples
+    #         acc_per_label = correct_per_label / samples_per_label
+    #         rec_per_label = correct_per_label / pred_per_label
+    #         train_writer.add_scalar("Accuracy", train_acc, epoch)
+    #         for i in range(dataset_builder.num_classes):
+    #             train_writer.add_scalar("Accuracy_{}".format(i), acc_per_label[i], epoch)
+    #             train_writer.add_scalar("Recall_{}".format(i), rec_per_label[i], epoch)
+    #         print('Training accuracy: {:.4f}'.format(train_acc))
+    #
+    #         # Evaluation on the validation set
+    #         model.eval()
+    #         correct = 0
+    #         n_samples = 0
+    #         samples_per_label = np.zeros(dataset_builder.num_classes)
+    #         pred_per_label = np.zeros(dataset_builder.num_classes)
+    #         correct_per_label = np.zeros(dataset_builder.num_classes)
+    #         with torch.no_grad():
+    #             for batch in val_data_loader:
+    #                 _, pred = model(batch).max(dim=1)
+    #                 correct += float(pred.eq(batch.y).sum().item())
+    #                 for i in range(dataset_builder.num_classes):
+    #                     batch_i = batch.y.eq(i)
+    #                     pred_i = pred.eq(i)
+    #                     samples_per_label[i] += batch_i.sum().item()
+    #                     pred_per_label[i] += pred_i.sum().item()
+    #                     correct_per_label[i] += (batch_i * pred_i).sum().item()
+    #                 n_samples += len(batch.y)
+    #         val_acc = correct / n_samples
+    #         acc_per_label = correct_per_label / samples_per_label
+    #         rec_per_label = correct_per_label / pred_per_label
+    #         val_writer.add_scalar("Accuracy", val_acc, epoch)
+    #         for i in range(dataset_builder.num_classes):
+    #             val_writer.add_scalar("Accuracy_{}".format(i), acc_per_label[i], epoch)
+    #             val_writer.add_scalar("Recall_{}".format(i), rec_per_label[i], epoch)
+    #         print('Validation accuracy: {:.4f}'.format(val_acc))
+    #
+    #         # Evaluation on the test set
+    #         model.eval()
+    #         correct = 0
+    #         n_samples = 0
+    #         samples_per_label = np.zeros(dataset_builder.num_classes)
+    #         pred_per_label = np.zeros(dataset_builder.num_classes)
+    #         correct_per_label = np.zeros(dataset_builder.num_classes)
+    #         with torch.no_grad():
+    #             for batch in test_data_loader:
+    #                 _, pred = model(batch).max(dim=1)
+    #                 correct += float(pred.eq(batch.y).sum().item())
+    #                 for i in range(dataset_builder.num_classes):
+    #                     batch_i = batch.y.eq(i)
+    #                     pred_i = pred.eq(i)
+    #                     samples_per_label[i] += batch_i.sum().item()
+    #                     pred_per_label[i] += pred_i.sum().item()
+    #                     correct_per_label[i] += (batch_i * pred_i).sum().item()
+    #                 n_samples += len(batch.y)
+    #         test_acc = correct / n_samples
+    #         acc_per_label = correct_per_label / samples_per_label
+    #         rec_per_label = correct_per_label / pred_per_label
+    #         test_writer.add_scalar("Accuracy", test_acc, epoch)
+    #         for i in range(dataset_builder.num_classes):
+    #             test_writer.add_scalar("Accuracy_{}".format(i), acc_per_label[i], epoch)
+    #             test_writer.add_scalar("Recall_{}".format(i), rec_per_label[i], epoch)
+    #         print('Test accuracy: {:.4f}'.format(test_acc))
+    #
+    #         if val_acc > best_val_acc:
+    #             best_val_acc = val_acc
+    #             # Saving model if model is better
+    #             checkpoint = {
+    #                 "epoch": epoch,
+    #                 "model_state_dict": model.state_dict(),
+    #                 "epoch_loss": epoch_loss / len(train_data_loader),
+    #                 "global_step": global_step,
+    #                 "best_val_acc": best_val_acc
+    #             }
+    #             torch.save(checkpoint, checkpoint_path)
+    #
+    #             dict_logging = vars(args).copy()
+    #             dict_logging["train_acc"] = train_acc
+    #             dict_logging["val_acc"] = val_acc
+    #             dict_logging["test_acc"] = test_acc
+    #             csv_logging.append(dict_logging)
+    #
+    # csv_exists = os.path.exists("results.csv")
+    # header = dict_logging.keys()
+    #
+    # with open("results.csv", "a") as csv_file:
+    #     writer = csv.DictWriter(csv_file, fieldnames=header)
+    #     if not csv_exists:
+    #         writer.writeheader()
+    #     for dict_ in csv_logging:
+    #         writer.writerow(dict_)
 
-            # Optimization
-            loss.backward()
-            optimizer.step()
+    train_sahp.train_eval_sahp(params, )
 
-            # TFBoard logging
-            train_writer.add_scalar("loss", loss.mean(), global_step)
-            global_step += 1
-
-            # if i_batch % 100 == 0:
-            #     print('batch-', i_batch, loss.mean().item())# 22240 * 8
-
-        print("epoch", epoch, "loss:", epoch_loss / len(train_data_loader))
-        if epoch % 1 == 0:
-            # Evaluation on the training set
-            model.eval()
-            correct = 0
-            n_samples = 0
-            samples_per_label = np.zeros(dataset_builder.num_classes)
-            pred_per_label = np.zeros(dataset_builder.num_classes)
-            correct_per_label = np.zeros(dataset_builder.num_classes)
-            with torch.no_grad():
-                for batch in train_data_loader:
-                    _, pred = model(batch).max(dim=1)
-                    correct += float(pred.eq(batch.y).sum().item())
-                    for i in range(dataset_builder.num_classes):
-                        batch_i = batch.y.eq(i)
-                        pred_i = pred.eq(i)
-                        samples_per_label[i] += batch_i.sum().item()
-                        pred_per_label[i] += pred_i.sum().item()
-                        correct_per_label[i] += (batch_i * pred_i).sum().item()
-                    n_samples += len(batch.y)
-            train_acc = correct / n_samples
-            acc_per_label = correct_per_label / samples_per_label
-            rec_per_label = correct_per_label / pred_per_label
-            train_writer.add_scalar("Accuracy", train_acc, epoch)
-            for i in range(dataset_builder.num_classes):
-                train_writer.add_scalar("Accuracy_{}".format(i), acc_per_label[i], epoch)
-                train_writer.add_scalar("Recall_{}".format(i), rec_per_label[i], epoch)
-            print('Training accuracy: {:.4f}'.format(train_acc))
-
-            # Evaluation on the validation set
-            model.eval()
-            correct = 0
-            n_samples = 0
-            samples_per_label = np.zeros(dataset_builder.num_classes)
-            pred_per_label = np.zeros(dataset_builder.num_classes)
-            correct_per_label = np.zeros(dataset_builder.num_classes)
-            with torch.no_grad():
-                for batch in val_data_loader:
-                    _, pred = model(batch).max(dim=1)
-                    correct += float(pred.eq(batch.y).sum().item())
-                    for i in range(dataset_builder.num_classes):
-                        batch_i = batch.y.eq(i)
-                        pred_i = pred.eq(i)
-                        samples_per_label[i] += batch_i.sum().item()
-                        pred_per_label[i] += pred_i.sum().item()
-                        correct_per_label[i] += (batch_i * pred_i).sum().item()
-                    n_samples += len(batch.y)
-            val_acc = correct / n_samples
-            acc_per_label = correct_per_label / samples_per_label
-            rec_per_label = correct_per_label / pred_per_label
-            val_writer.add_scalar("Accuracy", val_acc, epoch)
-            for i in range(dataset_builder.num_classes):
-                val_writer.add_scalar("Accuracy_{}".format(i), acc_per_label[i], epoch)
-                val_writer.add_scalar("Recall_{}".format(i), rec_per_label[i], epoch)
-            print('Validation accuracy: {:.4f}'.format(val_acc))
-
-            # Evaluation on the test set
-            model.eval()
-            correct = 0
-            n_samples = 0
-            samples_per_label = np.zeros(dataset_builder.num_classes)
-            pred_per_label = np.zeros(dataset_builder.num_classes)
-            correct_per_label = np.zeros(dataset_builder.num_classes)
-            with torch.no_grad():
-                for batch in test_data_loader:
-                    _, pred = model(batch).max(dim=1)
-                    correct += float(pred.eq(batch.y).sum().item())
-                    for i in range(dataset_builder.num_classes):
-                        batch_i = batch.y.eq(i)
-                        pred_i = pred.eq(i)
-                        samples_per_label[i] += batch_i.sum().item()
-                        pred_per_label[i] += pred_i.sum().item()
-                        correct_per_label[i] += (batch_i * pred_i).sum().item()
-                    n_samples += len(batch.y)
-            test_acc = correct / n_samples
-            acc_per_label = correct_per_label / samples_per_label
-            rec_per_label = correct_per_label / pred_per_label
-            test_writer.add_scalar("Accuracy", test_acc, epoch)
-            for i in range(dataset_builder.num_classes):
-                test_writer.add_scalar("Accuracy_{}".format(i), acc_per_label[i], epoch)
-                test_writer.add_scalar("Recall_{}".format(i), rec_per_label[i], epoch)
-            print('Test accuracy: {:.4f}'.format(test_acc))
-
-            if val_acc > best_val_acc:
-                best_val_acc = val_acc
-                # Saving model if model is better
-                checkpoint = {
-                    "epoch": epoch,
-                    "model_state_dict": model.state_dict(),
-                    "epoch_loss": epoch_loss / len(train_data_loader),
-                    "global_step": global_step,
-                    "best_val_acc": best_val_acc
-                }
-                torch.save(checkpoint, checkpoint_path)
-
-                dict_logging = vars(args).copy()
-                dict_logging["train_acc"] = train_acc
-                dict_logging["val_acc"] = val_acc
-                dict_logging["test_acc"] = test_acc
-                csv_logging.append(dict_logging)
-
-    csv_exists = os.path.exists("results.csv")
-    header = dict_logging.keys()
-
-    with open("results.csv", "a") as csv_file:
-        writer = csv.DictWriter(csv_file, fieldnames=header)
-        if not csv_exists:
-            writer.writeheader()
-        for dict_ in csv_logging:
-            writer.writerow(dict_)
     return
 
 
