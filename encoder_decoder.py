@@ -16,7 +16,7 @@ from dynamic_graph.embedding_module import get_embedding_module
 from dynamic_graph.time_encoding import TimeEncoder
 
 # from point_process.sahp import SAHP
-from point_process.train_sahp import MaskBatch,make_sahp_model
+from train_sahp import MaskBatch,make_sahp_model
 
 
 import torch_geometric.nn as pyg_nn
