@@ -432,12 +432,13 @@ class MMDNE:
             embeddings = self.node_emb.cpu().data.numpy()
         else:
             embeddings = self.node_emb.data.numpy()
-        writer = open(path, 'w')
-        writer.write('%d %d\n' % (self.node_dim, self.emb_size))
-        for n_idx in range(self.node_dim):
-            writer.write(' '.join(str(d) for d in embeddings[n_idx]) + '\n')
-        writer.close()
-        return embeddings
+        for count in self.node_dim:
+            writer = open(path, 'w')
+            writer.write('%d %d\n' % (self.node_dim[count], self.emb_size))
+            for n_idx in range(self.node_dim[count]):
+                writer.write(' '.join(str(d) for d in embeddings[n_idx]) + '\n')
+            writer.close()
+            return embeddings
 
 
 if __name__ == '__main__':
