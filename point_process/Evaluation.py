@@ -35,15 +35,23 @@ class Evaluation:
                 self.id2emb[node_id] = embeds
                 node_id += 1
 
-    def lr_classification(self,label_data,train_ratio):
+    def lr_classification(self,label_data,train_ratio,graph_id):
         i2l = dict()
         cl_x = []
         cl_y = []
         with open(label_data, 'r') as reader:
             for line in reader:
                 parts = line.split(":")
-                l_id, n_id = parts[0], int(parts[1])
-                i2l[n_id] = l_id
+                l_id, g_id = parts[0], line
+                if l_id == "unverified":
+                    l_id = int(0)
+                elif l_id == "non_rumor":
+                    l_id = int(1)
+                elif l_id == "true":
+                    l_id = int(2)
+                else:
+                    l_id = int(3)
+                i2l[g_id] = l_id
 
         i2l_list = sorted(i2l.items(), key=lambda x:x[0])
         for (id, label) in i2l_list:
@@ -51,14 +59,40 @@ class Evaluation:
             cl_x.append(self.id2emb[id])
 
         cl_x = np.stack(cl_x)
-        x_train, x_valid, y_train, y_valid = train_test_split(cl_x, cl_y, test_size=1-train_ratio, random_state=9)
+        x_train, x_valid, y_train, y_valid = train_test_split(cl_x, cl_y, test_size=1 - train_ratio, random_state=9)
         lr = LogisticRegression()
         lr.fit(x_train, y_train)
         y_valid_pred = lr.predict(x_valid)
         micro_f1 = f1_score(y_valid, y_valid_pred, average='micro')
         macro_f1 = f1_score(y_valid, y_valid_pred, average='macro')
-        print ('Macro_F1_score:{}'.format(macro_f1))
-        print ('Micro_F1_score:{}'.format(micro_f1))
+        print('Macro_F1_score:{}'.format(macro_f1))
+        print('Micro_F1_score:{}'.format(micro_f1))
+
+
+    # def lr_classification(self,label_data,train_ratio):
+    #     i2l = dict()
+    #     cl_x = []
+    #     cl_y = []
+    #     with open(label_data, 'r') as reader:
+    #         for line in reader:
+    #             parts = line.split(":")
+    #             l_id, n_id = parts[0], int(parts[1])
+    #             i2l[n_id] = l_id
+    #
+    #     i2l_list = sorted(i2l.items(), key=lambda x:x[0])
+    #     for (id, label) in i2l_list:
+    #         cl_y.append(label)
+    #         cl_x.append(self.id2emb[id])
+    #
+    #     cl_x = np.stack(cl_x)
+    #     x_train, x_valid, y_train, y_valid = train_test_split(cl_x, cl_y, test_size=1-train_ratio, random_state=9)
+    #     lr = LogisticRegression()
+    #     lr.fit(x_train, y_train)
+    #     y_valid_pred = lr.predict(x_valid)
+    #     micro_f1 = f1_score(y_valid, y_valid_pred, average='micro')
+    #     macro_f1 = f1_score(y_valid, y_valid_pred, average='macro')
+    #     print ('Macro_F1_score:{}'.format(macro_f1))
+    #     print ('Micro_F1_score:{}'.format(micro_f1))
 
     def network_reconstruction(self,reconstruction_file,train_ratio):
         nr_x = []
