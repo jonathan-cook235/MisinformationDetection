@@ -1,3 +1,6 @@
+import sys
+sys.path.append("../")
+
 import torch.nn as nn
 from point_process.single import Attention
 
