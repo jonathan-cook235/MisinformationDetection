@@ -28,7 +28,7 @@ DID = 0
 
 
 class MMDNE:
-    def __init__(self, file_path, graph_dict, cl_label_data,nr_data,save_path, emb_size=128, neg_size=10, hist_len=2, directed=False,
+    def __init__(self, file_path, graph_dict, count, cl_label_data,nr_data,save_path, emb_size=128, neg_size=10, hist_len=2, directed=False,
                  learning_rate=0.01, batch_size=1000, save_step=10, epoch_num=1, optim='SGD',
                  tlp_flag=False, trend_prediction=False, epsilon=1.0):
         self.emb_size = emb_size
@@ -58,78 +58,76 @@ class MMDNE:
         # self.dropout = nn.Dropout(p=0.1)
 
         print ('dataset helper...')
-        count = 0
         self.data = dict()
         self.node_dim = dict()
-        for i in graph_dict:
-            self.data[count] = DataHelper(graph_dict[i], neg_size, hist_len, directed, tlp_flag=self.tlp_flag, trend_pred_flag=self.trend_prediction)
-            self.node_dim[count] = self.data[count].get_node_dim()
+        self.data[count] = DataHelper(graph_dict[i], neg_size, hist_len, directed, tlp_flag=self.tlp_flag, trend_pred_flag=self.trend_prediction)
+        self.node_dim[count] = self.data[count].get_node_dim()
 
-            print ('max time: {}'.format(self.data[count].get_max_d_time()))
+        print ('max time: {}'.format(self.data[count].get_max_d_time()))
 
-            if torch.cuda.is_available():
-                with torch.cuda.device(DID):
-                    self.node_emb = Variable(torch.from_numpy(np.random.uniform(
-                        -1. / np.sqrt(self.node_dim[count]), 1. / np.sqrt(self.node_dim[count]), (self.node_dim[count], emb_size))).type(
-                        FType).cuda(), requires_grad=True)
-
-                    self.delta_s = Variable((torch.zeros(self.node_dim[count]) + 1.).type(FType).cuda(), requires_grad=True)
-                    self.delta_t = Variable((torch.zeros(self.node_dim[count]) + 1.).type(FType).cuda(), requires_grad=True)
-
-                    self.zeta = Variable((torch.ones(1)).type(FType).cuda(), requires_grad=True)
-                    self.gamma = Variable((torch.ones(1)).type(FType).cuda(), requires_grad=True)
-                    self.theta = Variable((torch.ones(1)).type(FType).cuda(), requires_grad=True)
-
-                    self.gat_hidden_size = 128
-
-                    self.global_att_linear_layer = torch.nn.Linear(self.gat_hidden_size, 1).cuda()
-
-                    self.W = torch.nn.Parameter(torch.zeros(size=(self.emb_size, self.gat_hidden_size))).cuda()
-                    torch.nn.init.xavier_uniform_(self.W.data, gain=1.414)
-                    self.a = torch.nn.Parameter(torch.zeros(size=(2 * self.gat_hidden_size, 1))).cuda()
-                    torch.nn.init.xavier_uniform_(self.a.data, gain=1.414)
-
-                    self.leakyrelu = torch.nn.LeakyReLU(0.2)  # alpha =0.2 for leakyrelu
-
-            else:
-                print('no gpu')
+        if torch.cuda.is_available():
+            with torch.cuda.device(DID):
                 self.node_emb = Variable(torch.from_numpy(np.random.uniform(
                     -1. / np.sqrt(self.node_dim[count]), 1. / np.sqrt(self.node_dim[count]), (self.node_dim[count], emb_size))).type(
-                    FType), requires_grad=True)
+                    FType).cuda(), requires_grad=True)
 
-                self.delta_s = Variable((torch.zeros(self.node_dim[count]) + 1.).type(FType), requires_grad=True)
-                self.delta_t = Variable((torch.zeros(self.node_dim[count]) + 1.).type(FType), requires_grad=True)
+                self.delta_s = Variable((torch.zeros(self.node_dim[count]) + 1.).type(FType).cuda(), requires_grad=True)
+                self.delta_t = Variable((torch.zeros(self.node_dim[count]) + 1.).type(FType).cuda(), requires_grad=True)
 
-                self.att_param = Variable(torch.diag(torch.from_numpy(np.random.uniform(
-                    -1. / np.sqrt(emb_size), 1. / np.sqrt(emb_size), (emb_size,))).type(
-                    FType)), requires_grad=True)
-
-                self.zeta = Variable((torch.ones(1)).type(FType), requires_grad=True)
-                self.gamma = Variable((torch.ones(1)).type(FType), requires_grad=True)
-                self.theta = Variable((torch.ones(1)).type(FType), requires_grad=True)
+                self.zeta = Variable((torch.ones(1)).type(FType).cuda(), requires_grad=True)
+                self.gamma = Variable((torch.ones(1)).type(FType).cuda(), requires_grad=True)
+                self.theta = Variable((torch.ones(1)).type(FType).cuda(), requires_grad=True)
 
                 self.gat_hidden_size = 128
 
-                self.global_att_linear_layer = torch.nn.Linear(self.gat_hidden_size, 1)
+                self.global_att_linear_layer = torch.nn.Linear(self.gat_hidden_size, 1).cuda()
 
-                self.W = torch.nn.Parameter(torch.zeros(size=(self.emb_size, self.gat_hidden_size)))
+                self.W = torch.nn.Parameter(torch.zeros(size=(self.emb_size, self.gat_hidden_size))).cuda()
                 torch.nn.init.xavier_uniform_(self.W.data, gain=1.414)
-                self.a = torch.nn.Parameter(torch.zeros(size=(2 * self.gat_hidden_size, 1)))
+                self.a = torch.nn.Parameter(torch.zeros(size=(2 * self.gat_hidden_size, 1))).cuda()
                 torch.nn.init.xavier_uniform_(self.a.data, gain=1.414)
 
                 self.leakyrelu = torch.nn.LeakyReLU(0.2)  # alpha =0.2 for leakyrelu
 
-            if self.optim == 'SGD':
-                self.opt = SGD(lr=learning_rate, params=[self.node_emb, self.delta_s, self.delta_t,
-                                                         self.zeta,self.gamma,self.theta])
-            elif self.optim == 'Adam':
-                self.opt = Adam(lr=learning_rate, params=[self.node_emb, self.delta_s, self.delta_t,
-                                                          self.zeta,self.gamma,self.theta])
+        else:
+            print('no gpu')
+            self.node_emb = Variable(torch.from_numpy(np.random.uniform(
+                -1. / np.sqrt(self.node_dim[count]), 1. / np.sqrt(self.node_dim[count]), (self.node_dim[count], emb_size))).type(
+                FType), requires_grad=True)
 
-            self.loss = torch.FloatTensor()
-            self.micro_loss = torch.FloatTensor()
-            self.macro_loss = torch.FloatTensor()
-            self.global_attention = Variable((torch.zeros(1)).type(FType))
+            self.delta_s = Variable((torch.zeros(self.node_dim[count]) + 1.).type(FType), requires_grad=True)
+            self.delta_t = Variable((torch.zeros(self.node_dim[count]) + 1.).type(FType), requires_grad=True)
+
+            self.att_param = Variable(torch.diag(torch.from_numpy(np.random.uniform(
+                -1. / np.sqrt(emb_size), 1. / np.sqrt(emb_size), (emb_size,))).type(
+                FType)), requires_grad=True)
+
+            self.zeta = Variable((torch.ones(1)).type(FType), requires_grad=True)
+            self.gamma = Variable((torch.ones(1)).type(FType), requires_grad=True)
+            self.theta = Variable((torch.ones(1)).type(FType), requires_grad=True)
+
+            self.gat_hidden_size = 128
+
+            self.global_att_linear_layer = torch.nn.Linear(self.gat_hidden_size, 1)
+
+            self.W = torch.nn.Parameter(torch.zeros(size=(self.emb_size, self.gat_hidden_size)))
+            torch.nn.init.xavier_uniform_(self.W.data, gain=1.414)
+            self.a = torch.nn.Parameter(torch.zeros(size=(2 * self.gat_hidden_size, 1)))
+            torch.nn.init.xavier_uniform_(self.a.data, gain=1.414)
+
+            self.leakyrelu = torch.nn.LeakyReLU(0.2)  # alpha =0.2 for leakyrelu
+
+        if self.optim == 'SGD':
+            self.opt = SGD(lr=learning_rate, params=[self.node_emb, self.delta_s, self.delta_t,
+                                                     self.zeta,self.gamma,self.theta])
+        elif self.optim == 'Adam':
+            self.opt = Adam(lr=learning_rate, params=[self.node_emb, self.delta_s, self.delta_t,
+                                                      self.zeta,self.gamma,self.theta])
+
+        self.loss = torch.FloatTensor()
+        self.micro_loss = torch.FloatTensor()
+        self.macro_loss = torch.FloatTensor()
+        self.global_attention = Variable((torch.zeros(1)).type(FType))
 
         def local_forward(self, s_nodes, t_nodes, e_times,
                           s_h_nodes, s_h_times, s_h_time_mask,
@@ -320,6 +318,7 @@ class MMDNE:
                 self.macro_loss += global_loss.sum().data
                 loss.backward()
                 self.opt.step()
+                count += 1
                 # self.opt.zero_grad()
                 # local_loss = self.local_loss(s_nodes, t_nodes, e_times,
                 #                              s_h_nodes, s_h_times, s_h_time_mask,
@@ -470,22 +469,26 @@ if __name__ == '__main__':
         g_id = count
         graph_dict[count] = tree_file_name
         count += 1
-    mmdne = MMDNE(file_path=parameters_dict['file_path'],
-                  graph_dict=graph_dict,
-                  cl_label_data=parameters_dict['cl_label_data'],
-                  nr_data=parameters_dict['nr_data'],
-                  save_path=parameters_dict['save_path'],
-                  save_step=parameters_dict['save_step'],
-                  directed=parameters_dict['directed'],
-                  epoch_num=parameters_dict['epoch_num'],
-                  hist_len=parameters_dict['hist_len'],
-                  neg_size=parameters_dict['neg_size'],
-                  learning_rate=parameters_dict['learning_rate'],
-                  batch_size=parameters_dict['batch_size'],
-                  optim=parameters_dict['optimization'],
-                  tlp_flag=parameters_dict['tlp_flag'],
-                  trend_prediction=parameters_dict['trend_prediction'],
-                  epsilon=parameters_dict['epsilon'])
+    count = 0
+    for i in graph_dict:
+        mmdne = MMDNE(file_path=parameters_dict['file_path'],
+                      graph_dict=graph_dict,
+                      count=count
+                      cl_label_data=parameters_dict['cl_label_data'],
+                      nr_data=parameters_dict['nr_data'],
+                      save_path=parameters_dict['save_path'],
+                      save_step=parameters_dict['save_step'],
+                      directed=parameters_dict['directed'],
+                      epoch_num=parameters_dict['epoch_num'],
+                      hist_len=parameters_dict['hist_len'],
+                      neg_size=parameters_dict['neg_size'],
+                      learning_rate=parameters_dict['learning_rate'],
+                      batch_size=parameters_dict['batch_size'],
+                      optim=parameters_dict['optimization'],
+                      tlp_flag=parameters_dict['tlp_flag'],
+                      trend_prediction=parameters_dict['trend_prediction'],
+                      epsilon=parameters_dict['epsilon'])
+        count += 1
 
     mmdne.train()
 
