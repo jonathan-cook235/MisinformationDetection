@@ -36,6 +36,7 @@ class Evaluation:
                 node_id += 1
 
     def lr_classification(self,label_data,train_ratio,graph_id):
+        ## XXX ##  graph classification by summing nodes
         i2l = dict()
         cl_x = []
         cl_y = []
@@ -60,9 +61,11 @@ class Evaluation:
 
         cl_x = np.stack(cl_x)
         x_train, x_valid, y_train, y_valid = train_test_split(cl_x, cl_y, test_size=1 - train_ratio, random_state=9)
+        ## XXX ##  graph classification by summing nodes
         lr = LogisticRegression()
         lr.fit(x_train, y_train)
         y_valid_pred = lr.predict(x_valid)
+
         micro_f1 = f1_score(y_valid, y_valid_pred, average='micro')
         macro_f1 = f1_score(y_valid, y_valid_pred, average='macro')
         print('Macro_F1_score:{}'.format(macro_f1))

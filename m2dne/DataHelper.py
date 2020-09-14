@@ -45,6 +45,7 @@ class DataHelper(Dataset):
         with open(file_path, 'rt') as infile:
             
             # Build integer node dictionary
+            ## XXX ##
             int_node_dict = {}
             list_of_nodes = []
             count = 0
@@ -56,8 +57,9 @@ class DataHelper(Dataset):
                 if orig_list[1] != 'ROOT':
                     s_node = int(orig_list[1])  # source node
                     t_node = int(dest_list[1])  # target node
-                    d_time = float(dest_list[5])
-                    if s_node not in list_of_nodes:
+                    d_time = float(dest_list[5]) ## XXX ##
+
+                    if s_node not in list_of_nodes:## XXX ##
                         int_node_dict.update({s_node : count})
                         list_of_nodes.append(s_node)
                         count += 1
@@ -81,8 +83,8 @@ class DataHelper(Dataset):
             #         #     self.node_numbers.append(count)
             #         #     count += 1
                     
-                    s_node = int_node_dict[s_node]
-                    t_node = int_node_dict[t_node]
+                    s_node = int_node_dict[s_node] ## XXX ##
+                    t_node = int_node_dict[t_node] ## XXX ##
                     
                     self.node_set.update([s_node, t_node])  # node set
     
