@@ -308,7 +308,7 @@ class SAHP(nn.Module):
 
 
 class SAHPGen(SeqGenerator):
-    # sequence generator for the point_process model
+    # sequence generator for the sahp_point_process model
 
     def __init__(self,model, record_intensity = True):
         super(SAHPGen, self).__init__(model, record_intensity)

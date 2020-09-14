@@ -15,7 +15,7 @@ from dynamic_graph.TGS_utils import get_neighbor_finder, NeighborFinder
 from dynamic_graph.embedding_module import get_embedding_module
 from dynamic_graph.time_encoding import TimeEncoder
 
-# from point_process.sahp import SAHP
+# from sahp_point_process.sahp import SAHP
 from train_sahp import MaskBatch,make_sahp_model
 
 
@@ -73,9 +73,9 @@ class EncoderDecoder(nn.Module):
     def forward(self, data):
         node_embeddings = self.encode(data)
         veracity_pred_loss  = self.decode1(node_embeddings, data.batch)
-        temporal_nll = self.decode2(node_embeddings, data.batch)
+        # temporal_nll = self.decode2(node_embeddings, data.batch)
 
-        total_loss = veracity_pred_loss + temporal_nll
+        total_loss = veracity_pred_loss #+ temporal_nll
 
         return total_loss
     

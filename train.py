@@ -298,7 +298,7 @@ if __name__ == "__main__":
 
 
     parser.add_argument('--n_degree', type=int, default=5, help='Number of neighbors to sample')
-    parser.add_argument('--n_head', type=int, default=2, help='Number of heads used in attention layer')
+    parser.add_argument('--n_head', type=int, default=8, help='Number of heads used in attention layer')
     # parser.add_argument('--n_epoch', type=int, default=50, help='Number of epochs')
     parser.add_argument('--n_layer', type=int, default=2, help='Number of network layers')
     # parser.add_argument('--lr', type=float, default=0.0001, help='Learning rate')
@@ -307,7 +307,7 @@ if __name__ == "__main__":
     parser.add_argument('--dropout', type=float, default=0.1, help='Dropout probability')
     parser.add_argument('--gpu', type=int, default=1, help='Idx for the gpu to use')
     parser.add_argument('--node_dim', type=int, default=100, help='Dimensions of the node embedding')
-    parser.add_argument('--time_dim', type=int, default=100, help='Dimensions of the time embedding')
+    parser.add_argument('--time_dim', type=int, default=10, help='Dimensions of the time embedding')
     parser.add_argument('--backprop_every', type=int, default=1, help='Every how many batches to '
                                                                       'backprop')
     # parser.add_argument('--use_memory', action='store_true',
