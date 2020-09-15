@@ -477,7 +477,6 @@ if __name__ == '__main__':
         count += 1
     mmdne = MMDNE(file_path=parameters_dict['file_path'],
                   graph_dict=graph_dict,
-                  count=count,
                   cl_label_data=parameters_dict['cl_label_data'],
                   nr_data=parameters_dict['nr_data'],
                   save_path=parameters_dict['save_path'],
