@@ -28,7 +28,7 @@ DID = 0
 
 
 class MMDNE:
-    def __init__(self, file_path, graph_dict, count, cl_label_data,nr_data,save_path, emb_size=128, neg_size=10, hist_len=2, directed=False,
+    def __init__(self, file_path, graph_dict, cl_label_data,nr_data,save_path, emb_size=128, neg_size=10, hist_len=2, directed=False,
                  learning_rate=0.01, batch_size=1000, save_step=10, epoch_num=1, optim='SGD',
                  tlp_flag=False, trend_prediction=False, epsilon=1.0):
         self.emb_size = emb_size
@@ -61,21 +61,21 @@ class MMDNE:
         self.data = dict()
         self.node_dim = dict()
         ## XXX ##
-        self.data[count] = DataHelper(graph_dict[i], neg_size, hist_len, directed, tlp_flag=self.tlp_flag, trend_pred_flag=self.trend_prediction)
-        self.node_dim[count] = self.data[count].get_node_dim()
+        self.data = DataHelper(graph_dict, neg_size, hist_len, directed, tlp_flag=self.tlp_flag, trend_pred_flag=self.trend_prediction)
+        self.node_dim = self.data.get_node_dim()
 
-        print ('max time: {}'.format(self.data[count].get_max_d_time()))
+        print ('max time: {}'.format(self.data.get_max_d_time()))
 
         if torch.cuda.is_available():
             with torch.cuda.device(DID):
                 ## XXX ##
                 self.node_emb = Variable(torch.from_numpy(np.random.uniform(
-                    -1. / np.sqrt(self.node_dim[count]), 1. / np.sqrt(self.node_dim[count]), (self.node_dim[count], emb_size))).type(
+                    -1. / np.sqrt(self.node_dim), 1. / np.sqrt(self.node_dim), (self.node_dim, emb_size))).type(
                     FType).cuda(), requires_grad=True)
 
                 ## XXX ##
-                self.delta_s = Variable((torch.zeros(self.node_dim[count]) + 1.).type(FType).cuda(), requires_grad=True)
-                self.delta_t = Variable((torch.zeros(self.node_dim[count]) + 1.).type(FType).cuda(), requires_grad=True)
+                self.delta_s = Variable((torch.zeros(self.node_dim) + 1.).type(FType).cuda(), requires_grad=True)
+                self.delta_t = Variable((torch.zeros(self.node_dim) + 1.).type(FType).cuda(), requires_grad=True)
 
                 self.zeta = Variable((torch.ones(1)).type(FType).cuda(), requires_grad=True)
                 self.gamma = Variable((torch.ones(1)).type(FType).cuda(), requires_grad=True)
@@ -96,12 +96,12 @@ class MMDNE:
             print('no gpu')
             ## XXX ##
             self.node_emb = Variable(torch.from_numpy(np.random.uniform(
-                -1. / np.sqrt(self.node_dim[count]), 1. / np.sqrt(self.node_dim[count]), (self.node_dim[count], emb_size))).type(
+                -1. / np.sqrt(self.node_dim), 1. / np.sqrt(self.node_dim), (self.node_dim, emb_size))).type(
                 FType), requires_grad=True)
 
             ## XXX ##
-            self.delta_s = Variable((torch.zeros(self.node_dim[count]) + 1.).type(FType), requires_grad=True)
-            self.delta_t = Variable((torch.zeros(self.node_dim[count]) + 1.).type(FType), requires_grad=True)
+            self.delta_s = Variable((torch.zeros(self.node_dim) + 1.).type(FType), requires_grad=True)
+            self.delta_t = Variable((torch.zeros(self.node_dim) + 1.).type(FType), requires_grad=True)
 
             self.att_param = Variable(torch.diag(torch.from_numpy(np.random.uniform(
                 -1. / np.sqrt(emb_size), 1. / np.sqrt(emb_size), (emb_size,))).type(
@@ -310,14 +310,14 @@ class MMDNE:
             self.opt.zero_grad()
             ## XXX ##
             local_loss, global_loss, loss = dict(), dict(), dict()
-            local_loss[count] = self.local_loss(s_nodes, t_nodes, e_times,
+            local_loss = self.local_loss(s_nodes, t_nodes, e_times,
                                          s_h_nodes, s_h_times, s_h_time_mask,
                                          t_h_nodes, t_h_times, t_h_time_mask,
                                          neg_s_node, neg_t_node)
 
-            global_loss[count] = self.global_loss(s_nodes, t_nodes, e_times,
+            global_loss = self.global_loss(s_nodes, t_nodes, e_times,
                                            delta_e_true, delta_n_true, node_sum, edge_last_time_sum)
-            loss[count] = (1-self.epsilon)*local_loss.sum() + self.epsilon * global_loss.sum()
+            loss = (1-self.epsilon)*local_loss.sum() + self.epsilon * global_loss.sum()
 
             self.loss += loss.data
             self.micro_loss += local_loss.sum().data
@@ -325,7 +325,6 @@ class MMDNE:
             loss.backward()
             self.opt.step()
             ## XXX ##
-            count += 1
             # self.opt.zero_grad()
             # local_loss = self.local_loss(s_nodes, t_nodes, e_times,
             #                              s_h_nodes, s_h_times, s_h_time_mask,
@@ -476,26 +475,23 @@ if __name__ == '__main__':
         g_id = count
         graph_dict[count] = tree_file_name
         count += 1
-    count = 0
-    for i in graph_dict:
-        mmdne = MMDNE(file_path=parameters_dict['file_path'],
-                      graph_dict=graph_dict,
-                      count=count,
-                      cl_label_data=parameters_dict['cl_label_data'],
-                      nr_data=parameters_dict['nr_data'],
-                      save_path=parameters_dict['save_path'],
-                      save_step=parameters_dict['save_step'],
-                      directed=parameters_dict['directed'],
-                      epoch_num=parameters_dict['epoch_num'],
-                      hist_len=parameters_dict['hist_len'],
-                      neg_size=parameters_dict['neg_size'],
-                      learning_rate=parameters_dict['learning_rate'],
-                      batch_size=parameters_dict['batch_size'],
-                      optim=parameters_dict['optimization'],
-                      tlp_flag=parameters_dict['tlp_flag'],
-                      trend_prediction=parameters_dict['trend_prediction'],
-                      epsilon=parameters_dict['epsilon'])
-        count += 1
+    mmdne = MMDNE(file_path=parameters_dict['file_path'],
+                  graph_dict=graph_dict,
+                  count=count,
+                  cl_label_data=parameters_dict['cl_label_data'],
+                  nr_data=parameters_dict['nr_data'],
+                  save_path=parameters_dict['save_path'],
+                  save_step=parameters_dict['save_step'],
+                  directed=parameters_dict['directed'],
+                  epoch_num=parameters_dict['epoch_num'],
+                  hist_len=parameters_dict['hist_len'],
+                  neg_size=parameters_dict['neg_size'],
+                  learning_rate=parameters_dict['learning_rate'],
+                  batch_size=parameters_dict['batch_size'],
+                  optim=parameters_dict['optimization'],
+                  tlp_flag=parameters_dict['tlp_flag'],
+                  trend_prediction=parameters_dict['trend_prediction'],
+                  epsilon=parameters_dict['epsilon'])
 
     mmdne.train()
 
