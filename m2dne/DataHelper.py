@@ -42,149 +42,151 @@ class DataHelper(Dataset):
     
         print ('loading data...')
         
-        with open(file_path, 'rt') as infile:
-            
-            # Build integer node dictionary
-            ## XXX ##
-            int_node_dict = {}
-            list_of_nodes = []
-            count = 0
-            for line in infile.readlines():
-                orig, dest = line.split("->")
-                orig_list = orig.split("'")
-                dest_list = dest.split("'")
-                # parts = line.strip().split()
-                if orig_list[1] != 'ROOT':
-                    s_node = int(orig_list[1])  # source node
-                    t_node = int(dest_list[1])  # target node
-                    d_time = float(dest_list[5]) ## XXX ##
+        self.data_dict = dict()
+        for i in file_path:
+            with open(file_path[i], 'rt') as infile:
 
-                    if s_node not in list_of_nodes:## XXX ##
-                        int_node_dict.update({s_node : count})
-                        list_of_nodes.append(s_node)
-                        count += 1
-                    if t_node not in list_of_nodes:
-                        int_node_dict.update({t_node : count})
-                        list_of_nodes.append(t_node)
-                        count += 1
-            
-            # # count = 1
-            # # self.node_numbers.append(count)
-            # for line2 in infile.readlines():
-            #     orig, dest = line2.split("->")
-            #     orig_list = orig.split("'")
-            #     dest_list = dest.split("'")
-            #     # parts = line.strip().split()
-            #     if orig_list[1] != 'ROOT':
-            #         s_node = int(orig_list[1])  # source node
-            #         t_node = int(dest_list[1])  # target node
-            #         d_time = float(dest_list[5])  # time slot, delta t
-            #         # if t_node not in self.node_set:
-            #         #     self.node_numbers.append(count)
-            #         #     count += 1
-                    
-                    s_node = int_node_dict[s_node] ## XXX ##
-                    t_node = int_node_dict[t_node] ## XXX ##
-                    
-                    self.node_set.update([s_node, t_node])  # node set
-    
-                    if s_node not in self.degrees:
-                        self.degrees[s_node] = 0
-                    if t_node not in self.degrees:
-                        self.degrees[t_node] = 0
-    
-                    # dblp temporal link prediction
-                    # if tlp_flag:
-                    #     if d_time >= 1.0:  # 2017 year
-                    #         continue
-                    # # eucore temporal link prediction
-                    # if tlp_flag:
-                    #     if d_time >= 0.631382316314:  # 2017 year
-                    #         continue
-    
-                    # # dblp Trend Prediction
-                    # if trend_pred_flag:
-                    #     if d_time > 0.5:
-                    #         continue
-                    # # tmall Trend Prediction
-                    # if trend_pred_flag:
-                    #     if d_time > 0.729317:
-                    #         continue
-                    # eucore Trend Prediction
-                    # if trend_pred_flag:
-                    #     if d_time > 0.333748443337:
-                    #         continue
-    
-                    self.edge_list.append((s_node,t_node,d_time))  # edge list
-                    if not directed:
-                        self.edge_list.append((t_node,s_node,d_time))
-    
-                    if s_node not in self.node2hist:
-                        self.node2hist[s_node] = list()
-                    self.node2hist[s_node].append((t_node, d_time))
-                    if not directed:  # undirected
-                        if t_node not in self.node2hist:
-                            self.node2hist[t_node] = list()
-                        self.node2hist[t_node].append((s_node, d_time))
-    
-                    if s_node not in self.node_time_nodes:
-                        self.node_time_nodes[s_node] = dict()
-                    if d_time not in self.node_time_nodes[s_node]:
-                        self.node_time_nodes[s_node][d_time] = list()
-                    self.node_time_nodes[s_node][d_time].append(t_node)
-                    if not directed:  # undirected
-                        if t_node not in self.node_time_nodes:
-                            self.node_time_nodes[t_node] = dict()
-                        if d_time not in self.node_time_nodes[t_node]:
-                            self.node_time_nodes[t_node][d_time] = list()
-                        self.node_time_nodes[t_node][d_time].append(s_node)
-    
-                    if d_time > self.max_d_time:
-                        self.max_d_time = d_time  # record the max time
-    
-                    self.degrees[s_node] += 1
-                    self.degrees[t_node] += 1
-    
-                    self.time_stamp.append(d_time)
-                    if d_time not in self.time_edges_dict:
-                        self.time_edges_dict[d_time] = []
-                    self.time_edges_dict[d_time].append((s_node, t_node))
-                    if d_time not in self.time_nodes_dict:
-                        self.time_nodes_dict[d_time] = []
-                    self.time_nodes_dict[d_time].append(s_node)
-                    self.time_nodes_dict[d_time].append(t_node)
+                # Build integer node dictionary
+                ## XXX ##
+                int_node_dict = {}
+                list_of_nodes = []
+                count = 0
+                for line in infile.readlines():
+                    orig, dest = line.split("->")
+                    orig_list = orig.split("'")
+                    dest_list = dest.split("'")
+                    # parts = line.strip().split()
+                    if orig_list[1] != 'ROOT':
+                        s_node = int(orig_list[1])  # source node
+                        t_node = int(dest_list[1])  # target node
+                        d_time = float(dest_list[5]) ## XXX ##
 
-        self.time_stamp = sorted(list(set(self.time_stamp)))  # !!! time from 0 to 1
+                        if s_node not in list_of_nodes:## XXX ##
+                            int_node_dict.update({s_node : count})
+                            list_of_nodes.append(s_node)
+                            count += 1
+                        if t_node not in list_of_nodes:
+                            int_node_dict.update({t_node : count})
+                            list_of_nodes.append(t_node)
+                            count += 1
 
-        self.node_dim = len(self.node_set)  # number of nodes 28085
+                # # count = 1
+                # # self.node_numbers.append(count)
+                # for line2 in infile.readlines():
+                #     orig, dest = line2.split("->")
+                #     orig_list = orig.split("'")
+                #     dest_list = dest.split("'")
+                #     # parts = line.strip().split()
+                #     if orig_list[1] != 'ROOT':
+                #         s_node = int(orig_list[1])  # source node
+                #         t_node = int(dest_list[1])  # target node
+                #         d_time = float(dest_list[5])  # time slot, delta t
+                #         # if t_node not in self.node_set:
+                #         #     self.node_numbers.append(count)
+                #         #     count += 1
 
-        self.data_size = 0  # number of edges, undirected x2 = 473788
-        for s in self.node2hist:
-            hist = self.node2hist[s]
-            hist = sorted(hist, key=lambda x: x[1])  # from past(0) to now(1)
-            self.node2hist[s] = hist
-            self.data_size += len(self.node2hist[s])
+                        s_node = int_node_dict[s_node] ## XXX ##
+                        t_node = int_node_dict[t_node] ## XXX ##
 
-        self.max_nei_len = max(map(lambda x: len(x), self.node2hist.values()))  # 955
-        print ('#nodes: {}, #edges: {}, #time_stamp: {}'.
-               format(self.node_dim,len(self.edge_list),len(self.time_stamp)))
-        print ('avg. degree: {}'.format(sum(self.degrees.values())/len(self.degrees)))
-        print ('max neighbors length: {}'.format(self.max_nei_len))
-        self.idx2source_id = np.zeros((self.data_size,), dtype=np.int32)
-        self.idx2target_id = np.zeros((self.data_size,), dtype=np.int32)
-        idx = 0
-        for s_node in self.node2hist:
-            for t_idx in range(len(self.node2hist[s_node])):
-                self.idx2source_id[idx] = s_node
-                self.idx2target_id[idx] = t_idx
-                idx += 1
+                        self.node_set.update([s_node, t_node])  # node set
 
-        print ('get edge rate...')
-        self.get_edge_rate()
+                        if s_node not in self.degrees:
+                            self.degrees[s_node] = 0
+                        if t_node not in self.degrees:
+                            self.degrees[t_node] = 0
 
-        print ('init. neg_table...')
-        self.neg_table = np.zeros((self.neg_table_size,))
-        self.init_neg_table()
+                        # dblp temporal link prediction
+                        # if tlp_flag:
+                        #     if d_time >= 1.0:  # 2017 year
+                        #         continue
+                        # # eucore temporal link prediction
+                        # if tlp_flag:
+                        #     if d_time >= 0.631382316314:  # 2017 year
+                        #         continue
+
+                        # # dblp Trend Prediction
+                        # if trend_pred_flag:
+                        #     if d_time > 0.5:
+                        #         continue
+                        # # tmall Trend Prediction
+                        # if trend_pred_flag:
+                        #     if d_time > 0.729317:
+                        #         continue
+                        # eucore Trend Prediction
+                        # if trend_pred_flag:
+                        #     if d_time > 0.333748443337:
+                        #         continue
+
+                        self.edge_list.append((s_node,t_node,d_time))  # edge list
+                        if not directed:
+                            self.edge_list.append((t_node,s_node,d_time))
+
+                        if s_node not in self.node2hist:
+                            self.node2hist[s_node] = list()
+                        self.node2hist[s_node].append((t_node, d_time))
+                        if not directed:  # undirected
+                            if t_node not in self.node2hist:
+                                self.node2hist[t_node] = list()
+                            self.node2hist[t_node].append((s_node, d_time))
+
+                        if s_node not in self.node_time_nodes:
+                            self.node_time_nodes[s_node] = dict()
+                        if d_time not in self.node_time_nodes[s_node]:
+                            self.node_time_nodes[s_node][d_time] = list()
+                        self.node_time_nodes[s_node][d_time].append(t_node)
+                        if not directed:  # undirected
+                            if t_node not in self.node_time_nodes:
+                                self.node_time_nodes[t_node] = dict()
+                            if d_time not in self.node_time_nodes[t_node]:
+                                self.node_time_nodes[t_node][d_time] = list()
+                            self.node_time_nodes[t_node][d_time].append(s_node)
+
+                        if d_time > self.max_d_time:
+                            self.max_d_time = d_time  # record the max time
+
+                        self.degrees[s_node] += 1
+                        self.degrees[t_node] += 1
+
+                        self.time_stamp.append(d_time)
+                        if d_time not in self.time_edges_dict:
+                            self.time_edges_dict[d_time] = []
+                        self.time_edges_dict[d_time].append((s_node, t_node))
+                        if d_time not in self.time_nodes_dict:
+                            self.time_nodes_dict[d_time] = []
+                        self.time_nodes_dict[d_time].append(s_node)
+                        self.time_nodes_dict[d_time].append(t_node)
+
+            self.time_stamp = sorted(list(set(self.time_stamp)))  # !!! time from 0 to 1
+
+            self.node_dim = len(self.node_set)  # number of nodes 28085
+
+            self.data_size = 0  # number of edges, undirected x2 = 473788
+            for s in self.node2hist:
+                hist = self.node2hist[s]
+                hist = sorted(hist, key=lambda x: x[1])  # from past(0) to now(1)
+                self.node2hist[s] = hist
+                self.data_size += len(self.node2hist[s])
+
+            self.max_nei_len = max(map(lambda x: len(x), self.node2hist.values()))  # 955
+            print ('#nodes: {}, #edges: {}, #time_stamp: {}'.
+                   format(self.node_dim,len(self.edge_list),len(self.time_stamp)))
+            print ('avg. degree: {}'.format(sum(self.degrees.values())/len(self.degrees)))
+            print ('max neighbors length: {}'.format(self.max_nei_len))
+            self.idx2source_id = np.zeros((self.data_size,), dtype=np.int32)
+            self.idx2target_id = np.zeros((self.data_size,), dtype=np.int32)
+            idx = 0
+            for s_node in self.node2hist:
+                for t_idx in range(len(self.node2hist[s_node])):
+                    self.idx2source_id[idx] = s_node
+                    self.idx2target_id[idx] = t_idx
+                    idx += 1
+
+            print ('get edge rate...')
+            self.get_edge_rate()
+
+            print ('init. neg_table...')
+            self.neg_table = np.zeros((self.neg_table_size,))
+            self.init_neg_table()
 
     def get_edge_rate(self):
         for i in range(len(self.time_stamp)):
@@ -364,5 +366,6 @@ class DataHelper(Dataset):
     def negative_sampling(self):
         rand_idx = np.random.randint(0, self.neg_table_size, (self.neg_size,))
         sampled_nodes = self.neg_table[rand_idx]
-        return sampled_nodes
+        self.data_dict.update(sampled_nodes)
+        return self.data_dict
 
