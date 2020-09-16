@@ -30,10 +30,10 @@ DID = 0
 
 def generate_graph_obj(directed, file_id, hist_len, neg_size, save_graph_path, tree_file_name,tlp_flag,trend_prediction):
     graph_file_path = os.path.join(save_graph_path, file_id)
+    ## Check this: make a balancec between saving time and saving space
     if os.path.exists(graph_file_path):
         with open(graph_file_path, 'rb') as f:
             graph_data = pickle.load(f)
-
     else:
         ## AKA self.data
         graph_data = DataHelper(tree_file_name, neg_size, hist_len, directed, tlp_flag=tlp_flag,
@@ -91,7 +91,7 @@ class MMDNE:
             graph_id += 1
 
         self.graph_num = graph_id# the number of graph-data + 1
-        self.node_dim = int(np.max(list(self.node_dim_dict.values()))) ## ??? ## the number of nodes in all graphs?
+        self.node_dim = int(np.max(list(self.node_dim_dict.values()))) ## Check this: the number of nodes in all graphs?
         self.max_d_time = np.max(list(self.max_d_time_dict.values()))## ??? ##
 
         # if torch.cuda.is_available():

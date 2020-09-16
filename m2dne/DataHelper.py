@@ -67,7 +67,7 @@ class DataHelper(Dataset):
                 # t_node = user_out  # [user_out, tweet_out]
 
                 time_in, time_out = float(orig_list[5]), float(dest_list[5])
-                d_time = np.abs(time_out - time_in)  # buggy
+                d_time = np.abs(time_out - time_in)  # Check This: time_out  or (time_out - time_in)
                 assert d_time >= 0
                 # d_time = time_out
 
@@ -120,7 +120,8 @@ class DataHelper(Dataset):
                 if s_node not in self.node2hist:
                     self.node2hist[s_node] = list()
                 self.node2hist[s_node].append((t_node, d_time))
-                if not directed:  # undirected
+                if not directed:
+                    # Check This: if this is directed, we will lose t_node in the self.node2hist
                     if t_node not in self.node2hist:
                         self.node2hist[t_node] = list()
                     self.node2hist[t_node].append((s_node, d_time))
@@ -157,7 +158,6 @@ class DataHelper(Dataset):
                 self.time_nodes_dict[d_time].append(t_node)
 
         self.time_stamp = sorted(list(set(self.time_stamp)))  # !!! time from 0 to 1
-        # self.time_stamp = self.time_stamp / self.max_d_time
 
         self.node_dim = len(self.node_set)  # number of nodes 28085
 
@@ -188,7 +188,7 @@ class DataHelper(Dataset):
 
         print ('init. neg_table...')
         self.neg_table = np.zeros((self.neg_table_size,))
-        self.init_neg_table()
+        self.init_neg_table() ## Check this: Time-consuming
 
     def get_edge_rate(self):
         for i in range(len(self.time_stamp)):
@@ -227,7 +227,6 @@ class DataHelper(Dataset):
         tot_sum, cur_sum, por = 0., 0., 0.
         n_id = 0
         for k in range(self.node_dim):
-        # for k  in  self.degrees.keys():
             tot_sum += np.power(self.degrees[k], self.NEG_SAMPLING_POWER)
         for k in range(self.neg_table_size):
             if (k + 1.) / self.neg_table_size > por:
@@ -348,7 +347,7 @@ class DataHelper(Dataset):
             'target_node': t_node,
             'event_time': e_time,
             's_history_nodes': s_his_nodes,
-            't_history_nodes': t_his_nodes,
+            't_history_nodes': t_his_nodes,## corresponds to H^j(t) in Eq2 of the MMDNE paper
             's_history_times': s_his_times,
             't_history_times': t_his_times,
             's_history_masks': s_his_masks,
