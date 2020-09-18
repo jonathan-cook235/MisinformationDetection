@@ -11,6 +11,7 @@ from torch.autograd import Variable
 from torch.optim import SGD, Adam
 from torch.utils.data import DataLoader
 from torch.nn.functional import softmax
+import torch.nn.functional as F
 import numpy as np
 import sys
 from DataHelper import DataHelper
@@ -21,16 +22,46 @@ import os
 import glob
 from torch import autograd
 import pickle
+import random
+
+from sklearn.model_selection import train_test_split
 
 FType = torch.FloatTensor
 LType = torch.LongTensor
 
 DID = 0
 
+def get_root_id(tree_file_name):
+    return os.path.splitext(os.path.basename(tree_file_name))[0]
 
-def generate_graph_obj(directed, file_id, hist_len, neg_size, save_graph_path, tree_file_name,tlp_flag,trend_prediction):
-    graph_file_path = os.path.join(save_graph_path, file_id)
-    ## Check this: make a balancec between saving time and saving space
+def to_label(label):
+    if label == "false":
+        return np.array([0])
+    if label == "true":
+        return np.array([1])
+    if label == "non-rumor":
+        return np.array([2])
+    if label == "unverified":
+        return np.array([3])
+
+def load_labels(dataset_dir):
+    """
+    Returns:
+        labels: dict[news_id:int -> label:int]
+    """
+    labels = {}
+    with open(os.path.join(dataset_dir, "label.txt")) as label_file:
+        for line in label_file.readlines():
+            label, news_id = line.split(":")
+            # labels[int(news_id)] = label
+            labels[str(int(news_id))] = label
+    return labels
+
+
+def read_graph_obj(directed, news_id, hist_len, neg_size, save_graph_path, tree_file_name,tlp_flag,trend_prediction):
+    graph_file_path = os.path.join(save_graph_path, news_id)
+    ## TICK-Check this: make a balancec between saving time and saving space
+    ## reduce self.neg_table_size from 1e8 to 1e6
     if os.path.exists(graph_file_path):
         with open(graph_file_path, 'rb') as f:
             graph_data = pickle.load(f)
@@ -46,12 +77,17 @@ def generate_graph_obj(directed, file_id, hist_len, neg_size, save_graph_path, t
 class MMDNE:
     def __init__(self, file_path, save_graph_path,
                  # graph_dict, cl_label_data, nr_data,
-                 save_embedding_path, emb_size=128, neg_size=10, hist_len=2, directed=False,
+                 save_embedding_path, emb_size=128, gat_hidden_size=32, neg_size=10, hist_len=2, directed=False,
                  learning_rate=0.01, batch_size=1000, save_step=10, epoch_num=1, optim='SGD',
-                 tlp_flag=False, trend_prediction=False, epsilon=1.0):
+                 tlp_flag=False, trend_prediction=False, only_binary=True,seed=64,
+                 epsilon=1.0, epsilon1=1.0,epsilon2=1.0
+    ):
         self.emb_size = emb_size
         self.neg_size = neg_size
         self.hist_len = hist_len
+        self.gat_hidden_size = gat_hidden_size
+
+        self.only_binary = only_binary
 
         self.lr = learning_rate
         self.batch = batch_size
@@ -61,36 +97,66 @@ class MMDNE:
         # self.nr_data = nr_data
         self.save_embedding_path = save_embedding_path
 
+        self.seed = seed
         self.optim = optim
         self.tlp_flag = tlp_flag
         self.trend_prediction = trend_prediction
 
         self.epsilon = epsilon
+        self.epsilon1=epsilon1
+        self.epsilon2=epsilon2
+
+        if self.only_binary:
+            self.output_dim = 2
+        else:
+            self.output_dim = 4
 
         print ('dataset helper...')
         self.graph_data_dict = dict()
         self.node_dim_dict = dict()
         self.max_d_time_dict = dict()
 
-        graph_id = 0
-        trees_to_parse = glob.glob(os.path.join(file_path, "*.txt"))
+        #################################################################################
+        self.labels = load_labels(file_path)
+
+        # Create train-val-test split
+        # Remove useless trees (i.e. with labels that we don't consider)
+
+        self.news_ids_to_consider = list(self.labels.keys())
+        if self.only_binary:
+            self.news_ids_to_consider = [news_id for news_id in self.news_ids_to_consider
+                                    if self.labels[news_id] in ['false', 'true']]
+
+        self.train_ids, self.val_ids = train_test_split(self.news_ids_to_consider, test_size=0.1, random_state=self.seed)
+        self.train_ids, self.test_ids = train_test_split(self.train_ids, test_size=0.25, random_state=self.seed * 7)
+        print(f"Len train/val/test {len(self.train_ids)} {len(self.val_ids)} {len(self.test_ids)}")
+        ##################################################################################
+        trees_to_parse = glob.glob(os.path.join(file_path, "tree/*.txt"))
+        number_files = len(trees_to_parse)
+        # for i_file, news_id in enumerate(self.news_ids_to_consider):
         for i_file, tree_file_name in enumerate(trees_to_parse):
-            if i_file >=3:
+            if i_file%100==0:
+                print('Loading the {} file out of total {} files: {}'.format(i_file, number_files, tree_file_name))
+
+            news_id = get_root_id(tree_file_name)
+            if news_id not in self.news_ids_to_consider:
                 continue
 
-            ## This is a new graph ## XXX ##
-            file_id = tree_file_name.split('/')[-1][:-4]
-            print(i_file, tree_file_name)
+            graph_data = read_graph_obj(directed, news_id, hist_len, neg_size, save_graph_path, tree_file_name,
+                                        self.tlp_flag, self.trend_prediction)
+            # graph_data = DataHelper(tree_file_name, neg_size, hist_len, directed, tlp_flag=tlp_flag,
+            #                         trend_pred_flag=trend_prediction)
 
-            graph_data = generate_graph_obj(directed, file_id, hist_len, neg_size, save_graph_path, tree_file_name,
-                                                 self.tlp_flag, self.trend_prediction)
 
-            self.graph_data_dict[graph_id] = graph_data
-            self.node_dim_dict[graph_id] = graph_data.get_node_dim()
-            self.max_d_time_dict[graph_id] = graph_data.get_max_d_time()
-            graph_id += 1
+            self.graph_data_dict[news_id] = graph_data
+            self.node_dim_dict[news_id] = graph_data.get_node_dim()
+            self.max_d_time_dict[news_id] = graph_data.get_max_d_time()
+            # graph_id += 1
 
-        self.graph_num = graph_id# the number of graph-data + 1
+        # Twitter15: 1490  vs 983
+        # assert len(self.news_ids_to_consider)==len(list(self.graph_data_dict.keys()))
+
+        # self.graph_num = graph_id# the number of graph-data + 1
         self.node_dim = int(np.max(list(self.node_dim_dict.values()))) ## Check this: the number of nodes in all graphs?
         self.max_d_time = np.max(list(self.max_d_time_dict.values()))## ??? ##
 
@@ -140,23 +206,28 @@ class MMDNE:
             self.gamma = Variable((torch.ones(1)).type(FType), requires_grad=True)
             self.theta = Variable((torch.ones(1)).type(FType), requires_grad=True)
 
-            self.gat_hidden_size = 128
-
             self.global_att_linear_layer = torch.nn.Linear(self.gat_hidden_size, 1)
 
             self.W = torch.nn.Parameter(torch.zeros(size=(self.emb_size, self.gat_hidden_size)))
             torch.nn.init.xavier_uniform_(self.W.data, gain=1.414)
+            self.W1 = torch.nn.Parameter(torch.zeros(size=(self.node_dim, 1)))# over all nodes
+            torch.nn.init.xavier_uniform_(self.W1.data, gain=1.414)
+            self.W2 = torch.nn.Parameter(torch.zeros(size=(emb_size, self.output_dim))) # over all emb-dimensions
+            torch.nn.init.xavier_uniform_(self.W2.data, gain=1.414)
+
             self.a = torch.nn.Parameter(torch.zeros(size=(2 * self.gat_hidden_size, 1)))
             torch.nn.init.xavier_uniform_(self.a.data, gain=1.414)
 
             self.leakyrelu = torch.nn.LeakyReLU(0.2)  # alpha =0.2 for leakyrelu
 
         if self.optim == 'SGD':
-            self.opt = SGD(lr=learning_rate, params=[self.node_emb, self.delta_s, self.delta_t,
-                                                     self.zeta,self.gamma,self.theta])
+            self.opt = SGD(lr=learning_rate,momentum=0.9,weight_decay=0.01,
+                           params=[self.node_emb, self.delta_s, self.delta_t,
+                                   self.zeta,self.gamma,self.theta])
         elif self.optim == 'Adam':
-            self.opt = Adam(lr=learning_rate, params=[self.node_emb, self.delta_s, self.delta_t,
-                                                      self.zeta,self.gamma,self.theta])
+            self.opt = Adam(lr=learning_rate, weight_decay=0.01,
+                            params=[self.node_emb, self.delta_s, self.delta_t,
+                                    self.zeta,self.gamma,self.theta])
 
         self.loss = torch.FloatTensor()
         self.micro_loss = torch.FloatTensor()
@@ -166,7 +237,7 @@ class MMDNE:
     def local_forward(self, s_nodes, t_nodes, e_times,
                       s_h_nodes, s_h_times, s_h_time_mask,
                       t_h_nodes, t_h_times, t_h_time_mask,
-                      s_neg_node,t_neg_node):
+                      s_neg_node,t_neg_node,news_id):
         batch = s_nodes.size()[0]
         s_node_emb = self.node_emb.index_select(0, Variable(s_nodes.view(-1))).view(batch, -1)  # (bach, emb_dim)
         t_node_emb = self.node_emb.index_select(0, Variable(t_nodes.view(-1))).view(batch, -1)
@@ -179,8 +250,11 @@ class MMDNE:
         d_time_t = torch.abs(e_times.unsqueeze(1) - t_h_times)  # (batch, hist_len)
 
         ## XXX ##
-        d_time_s = d_time_s / self.max_d_time
-        d_time_t = d_time_t / self.max_d_time
+        max_d_time = self.max_d_time_dict[news_id]
+        delta_s = torch.tanh(delta_s / max_d_time)
+        delta_t = torch.tanh(delta_t / max_d_time)
+        d_time_s = torch.tanh(d_time_s / max_d_time)
+        d_time_t = torch.tanh(d_time_t / max_d_time)
 
         # GAT attention_rewrite
         for i in range(self.hist_len):
@@ -219,9 +293,8 @@ class MMDNE:
                                torch.mm(t_h_node_emb.view(t_h_node_emb.size()[0] * self.hist_len, -1), self.W).
                                view(t_h_node_emb.size()[0],self.hist_len,-1)).sum(dim=1)
 
-        # att_his = self.attention.forward(s_node_emb,)
-
         # temporal-self-attention
+        # remove the history of t_node, i.e., remove it from global_att
         global_att = softmax(torch.tanh(self.global_att_linear_layer(torch.transpose(
             torch.cat([(s_his_hat_emb_inter * torch.exp(-delta_s * Variable(d_time_s.mean(dim=1)).unsqueeze(1))).unsqueeze(2),
                        (t_his_hat_emb_inter * torch.exp(-delta_t * Variable(d_time_t.mean(dim=1)).unsqueeze(1))).unsqueeze(2)],
@@ -244,7 +317,7 @@ class MMDNE:
 
         p_lambda = p_mu \
                    + aaa \
-                   + bbb
+                   + bbb # remove the history of t_node
 
         s_n_node_emb = self.node_emb.index_select(0, Variable(s_neg_node.view(-1))).view(batch, self.neg_size, -1)
         t_n_node_emb = self.node_emb.index_select(0, Variable(t_neg_node.view(-1))).view(batch, self.neg_size, -1)
@@ -281,7 +354,7 @@ class MMDNE:
     def local_loss(self, s_nodes, t_nodes, e_times,
                    s_h_nodes, s_h_times, s_h_time_mask,
                    t_h_nodes, t_h_times, t_h_time_mask,
-                   neg_s_node,neg_t_node):
+                   neg_s_node,neg_t_node,news_id):
         # if torch.cuda.is_available():
         #     with torch.cuda.device(DID):
         #         p_lambdas, n_lambdas_s, n_lambdas_t = self.local_forward(s_nodes, t_nodes, e_times,
@@ -298,13 +371,13 @@ class MMDNE:
             p_lambdas, n_lambdas_s, n_lambdas_t = self.local_forward(s_nodes, t_nodes, e_times,
                                                                      s_h_nodes, s_h_times, s_h_time_mask,
                                                                      t_h_nodes, t_h_times, t_h_time_mask,
-                                                                     neg_s_node, neg_t_node)
+                                                                     neg_s_node, neg_t_node,news_id)
             # print('p_lambdas',p_lambdas)
 
             aaa  =  - torch.log(p_lambdas.sigmoid() + 1e-6)
             bbb = - torch.log(n_lambdas_s.neg().sigmoid() + 1e-6).sum(dim=1)
             ccc = - torch.log(n_lambdas_t.neg().sigmoid() + 1e-6).sum(dim=1)
-            loss =  aaa + bbb + ccc
+            loss =  aaa + bbb + ccc # remove the history of t_node, i.e., ccc
 
         assert not torch.isnan(aaa).any()
         assert not torch.isnan(bbb).any()
@@ -318,11 +391,23 @@ class MMDNE:
         loss = criterion(torch.log(delta_e_pred + 1e-6), torch.log(Variable(delta_e_true) + 1e-6))
         return loss
 
+    def veracity_loss(self, news_id):
+        aaa = torch.mm(torch.transpose(self.node_emb, dim0=1,dim1=0), self.W1)
+        bbb = torch.mm(torch.transpose(aaa, dim0=1,dim1=0), self.W2)
+        ccc = F.log_softmax(bbb, dim=1)
+
+        criterion = torch.nn.CrossEntropyLoss()
+        label = self.labels[news_id]
+        y = torch.tensor(to_label(label))
+        vera_loss = criterion(ccc, y)
+        return vera_loss
+
     def update(self, s_nodes, t_nodes, e_times,
                s_h_nodes, s_h_times, s_h_time_mask,
                t_h_nodes, t_h_times, t_h_time_mask,
                neg_s_node,neg_t_node,
-               delta_e_true, delta_n_true, node_sum, edge_last_time_sum):
+               delta_e_true, delta_n_true, node_sum, edge_last_time_sum,
+               news_id):
         # if torch.cuda.is_available():
         #     with torch.cuda.device(DID):
         #         self.opt.zero_grad()
@@ -346,11 +431,13 @@ class MMDNE:
             local_loss = self.local_loss(s_nodes, t_nodes, e_times,
                                          s_h_nodes, s_h_times, s_h_time_mask,
                                          t_h_nodes, t_h_times, t_h_time_mask,
-                                         neg_s_node, neg_t_node)
+                                         neg_s_node, neg_t_node,news_id)
 
             global_loss = self.global_loss(s_nodes, t_nodes, e_times,
                                            delta_e_true, delta_n_true, node_sum, edge_last_time_sum)
-            loss = (1-self.epsilon)*local_loss.sum() + self.epsilon * global_loss.sum()
+            vera_loss = self.veracity_loss(news_id)
+            # loss = (1-self.epsilon)*local_loss.sum() + self.epsilon * global_loss.sum()
+            loss = vera_loss + self.epsilon1 * local_loss.sum() + self.epsilon2 * global_loss.sum() # epsilon=10
 
             self.loss += loss.data
             self.micro_loss += local_loss.sum().data
@@ -358,24 +445,32 @@ class MMDNE:
             loss.backward()
             self.opt.step()
 
+            return loss
+
     def train(self):
         print ('training...')
         i_batch = 0
+        news_id_list = list(self.graph_data_dict.keys())
         for epoch in range(self.epochs):
             self.loss = 0.0
             self.micro_loss = 0.0
             self.macro_loss = 0.0
 
-            for graph_id in range(self.graph_num):
+            # random.shuffle(news_id_list)
+            for num, news_id in enumerate(news_id_list):
+                # epoch-1 graph_id-879
+                # if graph_id != 247 and graph_id != 693 and graph_id != 674:
+                #     continue
+
                 ## for each graph
-                graph_data = self.graph_data_dict[graph_id]
+                graph_data = self.graph_data_dict[news_id]
 
                 loader = DataLoader(graph_data, batch_size=self.batch, shuffle=True, num_workers=10)
                 # if epoch % self.save_step == 0 and epoch != 0:
                 #     emb_save_name = os.path.join(self.save_embedding_path, ('tne_epoch%d_lr%.2f_his%d_neg%d_eps%.1f.emb'
                 #                                                       % (epoch, self.lr, self.hist_len, self.neg_size,self.epsilon)))
                 #     self.save_node_embeddings(emb_save_name)
-
+                #
                 # if epoch % 10 == 0 and epoch != 0:
                 #     print ('evaluation...')
                 #     if torch.cuda.is_available():
@@ -384,10 +479,10 @@ class MMDNE:
                 #         embeddings = self.node_emb.data.numpy()
                 #     eva = Evaluation(emb_data=embeddings,from_file=False)
                 #     eva.lr_classification(train_ratio=0.8,label_data=self.cl_label_data,graph_id=self.graph_num)
-
+                total_batch_loss = 0
                 for _, sample_batched in enumerate(loader):
                     i_batch += 1
-                    if i_batch % 100 == 0 and i_batch != 0:
+                    if i_batch % 1000 == 0 and i_batch != 0:
                         sys.stdout.write('\r\n' + str(i_batch * self.batch)
                                          + '\tloss: ' + str(self.loss.cpu().numpy() / (self.batch * i_batch))
                                          + '\tmicro_loss: ' + str(self.micro_loss.cpu().numpy() / (self.batch * i_batch))
@@ -403,51 +498,44 @@ class MMDNE:
 
                     if torch.cuda.is_available():
                         with torch.cuda.device(DID):
-                            self.update(sample_batched['source_node'].type(LType).cuda(),
-                                        sample_batched['target_node'].type(LType).cuda(),
-                                        sample_batched['event_time'].type(FType).cuda(),
-                                        sample_batched['s_history_nodes'].type(LType).cuda(),
-                                        sample_batched['s_history_times'].type(FType).cuda(),
-                                        sample_batched['s_history_masks'].type(FType).cuda(),
-                                        sample_batched['t_history_nodes'].type(LType).cuda(),
-                                        sample_batched['t_history_times'].type(FType).cuda(),
-                                        sample_batched['t_history_masks'].type(FType).cuda(),
-                                        sample_batched['neg_s_nodes'].type(LType).cuda(),
-                                        sample_batched['neg_t_nodes'].type(LType).cuda(),
-                                        sample_batched['delta_e_true'].type(FType).cuda(),
-                                        sample_batched['delta_n_true'].type(FType).cuda(),
-                                        sample_batched['node_sum'].type(FType).cuda(),
-                                        sample_batched['edge_last_time_sum'].type(FType).cuda())
+                            batch_loss = self.update(sample_batched['source_node'].type(LType).cuda(),
+                                                     sample_batched['target_node'].type(LType).cuda(),
+                                                     sample_batched['event_time'].type(FType).cuda(),
+                                                     sample_batched['s_history_nodes'].type(LType).cuda(),
+                                                     sample_batched['s_history_times'].type(FType).cuda(),
+                                                     sample_batched['s_history_masks'].type(FType).cuda(),
+                                                     sample_batched['t_history_nodes'].type(LType).cuda(),
+                                                     sample_batched['t_history_times'].type(FType).cuda(),
+                                                     sample_batched['t_history_masks'].type(FType).cuda(),
+                                                     sample_batched['neg_s_nodes'].type(LType).cuda(),
+                                                     sample_batched['neg_t_nodes'].type(LType).cuda(),
+                                                     sample_batched['delta_e_true'].type(FType).cuda(),
+                                                     sample_batched['delta_n_true'].type(FType).cuda(),
+                                                     sample_batched['node_sum'].type(FType).cuda(),
+                                                     sample_batched['edge_last_time_sum'].type(FType).cuda(),
+                                                     news_id
+                                                     )
                     else:
-                        # self.update(sample_batched['source_node'].type(LType),
-                        #             sample_batched['target_node'].type(LType),
-                        #             sample_batched['event_time'].type(FType),
-                        #             sample_batched['neg_s_nodes'].type(LType),
-                        #             sample_batched['s_history_nodes'].type(LType),
-                        #             sample_batched['s_history_times'].type(FType),
-                        #             sample_batched['s_history_masks'].type(FType),
-                        #             sample_batched['neg_t_nodes'].type(LType),
-                        #             sample_batched['t_history_nodes'].type(LType),
-                        #             sample_batched['t_history_times'].type(FType),
-                        #             sample_batched['t_history_masks'].type(FType))
-                        self.update(sample_batched['source_node'].type(LType),
-                                        sample_batched['target_node'].type(LType),
-                                        sample_batched['event_time'].type(FType),
-                                        sample_batched['s_history_nodes'].type(LType),
-                                        sample_batched['s_history_times'].type(FType),
-                                        sample_batched['s_history_masks'].type(FType),
-                                        sample_batched['t_history_nodes'].type(LType),
-                                        sample_batched['t_history_times'].type(FType),
-                                        sample_batched['t_history_masks'].type(FType),
-                                        sample_batched['neg_s_nodes'].type(LType),
-                                        sample_batched['neg_t_nodes'].type(LType),
-                                        sample_batched['delta_e_true'].type(FType),
-                                        sample_batched['delta_n_true'].type(FType),
-                                        sample_batched['node_sum'].type(FType),
-                                        sample_batched['edge_last_time_sum'].type(FType))
-
-                sys.stdout.write('\r\nepoch ' + str(epoch) + ': avg loss = ' +
-                                 str(self.loss.cpu().numpy() / len(graph_data)) + '\n')
+                        batch_loss = self.update(sample_batched['source_node'].type(LType),
+                                                 sample_batched['target_node'].type(LType),
+                                                 sample_batched['event_time'].type(FType),
+                                                 sample_batched['s_history_nodes'].type(LType),
+                                                 sample_batched['s_history_times'].type(FType),
+                                                 sample_batched['s_history_masks'].type(FType),
+                                                 sample_batched['t_history_nodes'].type(LType),
+                                                 sample_batched['t_history_times'].type(FType),
+                                                 sample_batched['t_history_masks'].type(FType),
+                                                 sample_batched['neg_s_nodes'].type(LType),
+                                                 sample_batched['neg_t_nodes'].type(LType),
+                                                 sample_batched['delta_e_true'].type(FType),
+                                                 sample_batched['delta_n_true'].type(FType),
+                                                 sample_batched['node_sum'].type(FType),
+                                                 sample_batched['edge_last_time_sum'].type(FType),
+                                                 news_id
+                                                 )
+                    total_batch_loss += batch_loss.detach().numpy()
+                sys.stdout.write('\r\nepoch-' + str(epoch) +  ' num-' + str(num) + ' news_id-' + str(news_id) +
+                                 ': avg loss = ' + str(total_batch_loss / len(graph_data)) + '\n')
                 sys.stdout.flush()
 
         # emb_save_name = os.path.join(self.save_embedding_path, ('tne_epoch%d_lr%.2f_his%d_neg%d_eps%.1f.emb'
@@ -482,7 +570,7 @@ class MMDNE:
 if __name__ == '__main__':
     print(time.asctime(time.localtime(time.time())))
     parameters_dict = {
-        'file_path': '../rumor_detection_acl2017/twitter15/tree/',
+        'file_path': '../rumor_detection_acl2017/twitter15/',
         'save_graph_path':'../rumor_detection_acl2017/twitter15/graph_obj/',
         # 'cl_label_data': 'data/twitter15/label.txt',
         # 'nr_data': 'data/twitter15/twitter15_network_reconstruction_0.01edge.txt',
@@ -490,14 +578,17 @@ if __name__ == '__main__':
         'epoch_num': 1000,
         'batch_size': 32,
         'emb_size': 128,
-        'learning_rate': 0.001,
+        'gat_hidden_size':32,
+        'learning_rate': 1e-4,
         'neg_size': 5,
         'hist_len': 5,
         'directed': False,
         'save_step': 50,
-        'optimization': 'SGD',
+        'optimization': 'Adam',#SGD: NaN in the 247-graph
         'tlp_flag':False,
         'trend_prediction':False,
+        'epsilon1': 1,
+        'epsilon2': 1,
         'epsilon':0.4}
     print ('parameters: \r\n{}'.format(parameters_dict))
 
@@ -515,13 +606,17 @@ if __name__ == '__main__':
                   save_step=parameters_dict['save_step'],
                   directed=parameters_dict['directed'],
                   epoch_num=parameters_dict['epoch_num'],
+                  gat_hidden_size=parameters_dict['gat_hidden_size'],
                   hist_len=parameters_dict['hist_len'],
+                  emb_size=parameters_dict['emb_size'],
                   neg_size=parameters_dict['neg_size'],
                   learning_rate=parameters_dict['learning_rate'],
                   batch_size=parameters_dict['batch_size'],
                   optim=parameters_dict['optimization'],
                   tlp_flag=parameters_dict['tlp_flag'],
                   trend_prediction=parameters_dict['trend_prediction'],
+                  epsilon1=parameters_dict['epsilon1'],
+                  epsilon2=parameters_dict['epsilon2'],
                   epsilon=parameters_dict['epsilon'])
     with autograd.detect_anomaly():
         mmdne.train()

@@ -30,7 +30,7 @@ class DataHelper(Dataset):
         self.max_d_time = -sys.maxsize  # Time interval [0, T]
 
         self.NEG_SAMPLING_POWER = 0.75
-        self.neg_table_size = int(1e8)
+        self.neg_table_size = int(1e6)#1e8
 
         self.node_time_nodes = dict()
         self.node_set = set()
@@ -46,7 +46,7 @@ class DataHelper(Dataset):
         self.time_edges_dict = {}
         self.time_nodes_dict = {}
     
-        print ('loading data...')
+        # print ('loading data...')
         # self.data_dict = dict()
 
         with open(file_path, 'rt') as infile:
@@ -67,9 +67,11 @@ class DataHelper(Dataset):
                 # t_node = user_out  # [user_out, tweet_out]
 
                 time_in, time_out = float(orig_list[5]), float(dest_list[5])
-                d_time = np.abs(time_out - time_in)  # Check This: time_out  or (time_out - time_in)
-                assert d_time >= 0
-                # d_time = time_out
+                # TICK-Check This: time_out  or (time_out - time_in)
+                # Refer to d_time in  local_forward
+                # d_time = np.abs(time_out - time_in)
+                # assert d_time >= 0
+                d_time = time_out
 
                 if user_in not in list_of_nodes:## XXX ##
                     int_node_dict.update({user_in : node_id})#
@@ -121,7 +123,8 @@ class DataHelper(Dataset):
                     self.node2hist[s_node] = list()
                 self.node2hist[s_node].append((t_node, d_time))
                 if not directed:
-                    # Check This: if this is directed, we will lose t_node in the self.node2hist
+                    # TICK-Check This: if this is directed, we will lose t_node in the self.node2hist
+                    # Can implement direct graphs by removing t-node from local_forward in MMDNE.py (Equation-2)
                     if t_node not in self.node2hist:
                         self.node2hist[t_node] = list()
                     self.node2hist[t_node].append((s_node, d_time))
@@ -169,10 +172,10 @@ class DataHelper(Dataset):
             self.data_size += len(self.node2hist[s])
 
         self.max_nei_len = max(map(lambda x: len(x), self.node2hist.values()))  # 955
-        print ('/t#nodes: {}, #edges: {}, #time_stamp: {}'.
-               format(self.node_dim,len(self.edge_list),len(self.time_stamp)))
-        print ('/tavg. degree: {}'.format(sum(self.degrees.values())/len(self.degrees)))
-        print ('/tmax neighbors length: {}'.format(self.max_nei_len))
+        # print ('\t#nodes: {}, #edges: {}, #time_stamp: {}'.
+        #        format(self.node_dim,len(self.edge_list),len(self.time_stamp)))
+        # print ('\tavg. degree: {}'.format(sum(self.degrees.values())/len(self.degrees)))
+        # print ('\tmax neighbors length: {}'.format(self.max_nei_len))
         self.idx2source_id = np.zeros((self.data_size,), dtype=np.int32)
         self.idx2target_id = np.zeros((self.data_size,), dtype=np.int32)
         idx = 0
@@ -183,10 +186,10 @@ class DataHelper(Dataset):
                 self.idx2target_id[idx] = t_idx
                 idx += 1
 
-        print ('get edge rate...')
+        # print ('\tget edge rate...')
         self.get_edge_rate()
 
-        print ('init. neg_table...')
+        # print ('\tinit. neg_table...')
         self.neg_table = np.zeros((self.neg_table_size,))
         self.init_neg_table() ## Check this: Time-consuming
 
@@ -307,7 +310,7 @@ class DataHelper(Dataset):
         else:
             s_his = self.node2hist[s_node][t_idx - self.hist_len:t_idx]
 
-        # get the history neighbors for target node
+        # undirected: get the history neighbors for target node
         t_his_list = self.node2hist[t_node]
         s_idx = t_his_list.index((s_node, e_time))
         if s_idx - self.hist_len < 0:
