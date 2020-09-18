@@ -35,41 +35,52 @@ class Evaluation:
                 self.id2emb[node_id] = embeds
                 node_id += 1
 
-    def lr_classification(self,label_data,train_ratio,graph_id):
+    def graph_classification(self):
         ## XXX ##  graph classification by summing nodes
-        i2l = dict()
-        cl_x = []
-        cl_y = []
-        with open(label_data, 'r') as reader:
-            for line in reader:
-                parts = line.split(":")
-                l_id, g_id = parts[0], line
-                if l_id == "unverified":
-                    l_id = int(0)
-                elif l_id == "non_rumor":
-                    l_id = int(1)
-                elif l_id == "true":
-                    l_id = int(2)
-                else:
-                    l_id = int(3)
-                i2l[g_id] = l_id
+        # i2l = dict()
+        # cl_x = []
+        # cl_y = []
+        # with open(label_data, 'r') as reader:
+        #     for line in reader:
+        #         parts = line.split(":")
+        #         l_id, g_id = parts[0], line
+        #         if l_id == "unverified":
+        #             l_id = int(0)
+        #         elif l_id == "non_rumor":
+        #             l_id = int(1)
+        #         elif l_id == "true":
+        #             l_id = int(2)
+        #         else:
+        #             l_id = int(3)
+        #         i2l[g_id] = l_id
 
-        i2l_list = sorted(i2l.items(), key=lambda x:x[0])
-        for (id, label) in i2l_list:
-            cl_y.append(label)
-            cl_x.append(self.id2emb[id])
-
-        cl_x = np.stack(cl_x)
-        x_train, x_valid, y_train, y_valid = train_test_split(cl_x, cl_y, test_size=1 - train_ratio, random_state=9)
-        ## XXX ##  graph classification by summing nodes
-        lr = LogisticRegression()
-        lr.fit(x_train, y_train)
-        y_valid_pred = lr.predict(x_valid)
-
-        micro_f1 = f1_score(y_valid, y_valid_pred, average='micro')
-        macro_f1 = f1_score(y_valid, y_valid_pred, average='macro')
-        print('Macro_F1_score:{}'.format(macro_f1))
-        print('Micro_F1_score:{}'.format(micro_f1))
+        mmdne.eval()
+        correct = 0
+        n_samples = 0
+        samples_per_label = np.zeros(4)
+        pred_per_label = np.zeros(4)
+        correct_per_label = np.zeros(4)
+        with torch.no_grad():
+            for batch in DataLoader:
+                _, pred = mmdne().max(dim=1)
+                label = self.labels[news_id]
+                y = torch.tensor(to_label(label))
+                correct += float(pred.eq(y).sum().item())
+                for i in range(4):
+                    batch_i = y(i)
+                    pred_i = pred.eq(i)
+                    samples_per_label[i] += batch_i.sum().item()
+                    pred_per_label[i] += pred_i.sum().item()
+                    correct_per_label[i] += (batch_i*pred_i).sum().item()
+                n_samples += len(batch.y)
+        train_acc = correct / n_samples
+        acc_per_label = correct_per_label / samples_per_label
+        rec_per_label = correct_per_label / pred_per_label
+        train_writer.add_scalar("Accuracy", train_acc, epoch)
+        for i in range(dataset_builder.num_classes):
+            train_writer.add_scalar("Accuracy_{}".format(i), acc_per_label[i], epoch)
+            train_writer.add_scalar("Recall_{}".format(i), rec_per_label[i], epoch)
+        print('Training accuracy: {:.4f}'.format(train_acc))
 
 
     # def lr_classification(self,label_data,train_ratio):
