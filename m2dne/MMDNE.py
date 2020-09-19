@@ -321,7 +321,8 @@ class MMDNE(nn.Module):
 
         # global_att_s = 0.5
         # global_att_t = 0.5
-        p_mu = ((s_node_emb - t_node_emb) ** 2).sum(dim=1).neg()  # (batch, 1)
+        p_mu = nn.Bilinear(tuple(map(tuple, s_node_emb.detach().numpy())), tuple(map(tuple, t_node_emb.detach().numpy())), 1)
+        # p_mu = ((s_node_emb - t_node_emb) ** 2).sum(dim=1).neg()  # (batch, 1)
         p_alpha_s = ((s_h_node_emb - t_node_emb.unsqueeze(1)) ** 2).sum(dim=2).neg()   # (batch, h_len)
         p_alpha_t = ((t_h_node_emb - s_node_emb.unsqueeze(1)) ** 2).sum(dim=2).neg()
 
