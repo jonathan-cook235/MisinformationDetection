@@ -15,69 +15,22 @@ from torch.nn.functional import softmax
 import torch.nn.functional as F
 import numpy as np
 import sys
-from DataHelper import DataHelper
-from Evaluation import Evaluation
-# from multi_head import MultiHeadedAttention
-# from sublayer import SublayerConnection
 import os
-import glob
+from process_data import create_dataset, to_label
+
 from torch import autograd
 import pickle
 import random
 
-from sklearn.model_selection import train_test_split
 
 FType = torch.FloatTensor
 LType = torch.LongTensor
 
 DID = 0
 
-def get_root_id(tree_file_name):
-    return os.path.splitext(os.path.basename(tree_file_name))[0]
-
-def to_label(label):
-    if label == "false":
-        return np.array([0])
-    if label == "true":
-        return np.array([1])
-    if label == "non-rumor":
-        return np.array([2])
-    if label == "unverified":
-        return np.array([3])
-
-def load_labels(dataset_dir):
-    """
-    Returns:
-        labels: dict[news_id:int -> label:int]
-    """
-    labels = {}
-    with open(os.path.join(dataset_dir, "label.txt")) as label_file:
-        for line in label_file.readlines():
-            label, news_id = line.split(":")
-            # labels[int(news_id)] = label
-            labels[str(int(news_id))] = label
-    return labels
-
-
-def read_graph_obj(directed, news_id, hist_len, neg_size, save_graph_path, tree_file_name,tlp_flag,trend_prediction):
-    graph_file_path = os.path.join(save_graph_path, news_id)
-    ## TICK-Check this: make a balancec between saving time and saving space
-    ## reduce self.neg_table_size from 1e8 to 1e6
-    if os.path.exists(graph_file_path):
-        with open(graph_file_path, 'rb') as f:
-            graph_data = pickle.load(f)
-    else:
-        ## AKA self.data
-        graph_data = DataHelper(tree_file_name, neg_size, hist_len, directed, tlp_flag=tlp_flag,
-                                trend_pred_flag=trend_prediction)
-
-        with open(graph_file_path, 'wb') as f:
-            pickle.dump(graph_data, f, pickle.HIGHEST_PROTOCOL)
-    return graph_data
 
 class MMDNE(nn.Module):
     def __init__(self, file_path, save_graph_path,
-                 # graph_dict, cl_label_data, nr_data,
                  save_embedding_path, emb_size=128, gat_hidden_size=32, neg_size=10, hist_len=2, directed=False,
                  learning_rate=0.01, batch_size=1000, save_step=10, epoch_num=1, optim='SGD',
                  tlp_flag=False, trend_prediction=False, only_binary=True,seed=64,
@@ -91,15 +44,13 @@ class MMDNE(nn.Module):
 
         self.only_binary = only_binary
 
-        self.lr = learning_rate
+        self.epochs = epoch_num
         self.batch = batch_size
         self.save_step = save_step
-        self.epochs = epoch_num
-        # self.cl_label_data = cl_label_data
-        # self.nr_data = nr_data
         self.save_embedding_path = save_embedding_path
 
         self.seed = seed
+        self.lr = learning_rate
         self.optim = optim
         self.tlp_flag = tlp_flag
         self.trend_prediction = trend_prediction
@@ -113,162 +64,106 @@ class MMDNE(nn.Module):
         else:
             self.output_dim = 4
 
-        print ('dataset helper...')
-        self.graph_data_dict = dict()
-        self.node_dim_dict = dict()
-        self.max_d_time_dict = dict()
+        self.graph_data_dict, self.node_dim_dict, self.max_d_time_dict, \
+        self.node_dim, self.max_d_time, self.train_ids, self.val_ids, self.test_ids, \
+        self.labels, self.news_ids_to_consider, \
+        self.preprocessed_tweet_fts, self.preprocessed_user_fts, \
+        self.num_tweet_features, self.num_user_features = \
+            create_dataset(directed, file_path, hist_len, neg_size, save_graph_path,
+                           only_binary, seed, tlp_flag, trend_prediction)
 
-        #################################################################################
-        self.labels = load_labels(file_path)
-
-        # Create train-val-test split
-        # Remove useless trees (i.e. with labels that we don't consider)
-
-        self.news_ids_to_consider = list(self.labels.keys())
-        if self.only_binary:
-            self.news_ids_to_consider = [news_id for news_id in self.news_ids_to_consider
-                                    if self.labels[news_id] in ['false', 'true']]
-
-        self.train_ids, self.val_ids = train_test_split(self.news_ids_to_consider, test_size=0.1, random_state=self.seed)
-        self.train_ids, self.test_ids = train_test_split(self.train_ids, test_size=0.25, random_state=self.seed * 7)
-        print(f"Len train/val/test {len(self.train_ids)} {len(self.val_ids)} {len(self.test_ids)}")
-        ##################################################################################
-        trees_to_parse = glob.glob(os.path.join(file_path, "tree/*.txt"))
-        number_files = len(trees_to_parse)
-        # for i_file, news_id in enumerate(self.news_ids_to_consider):
-        for i_file, tree_file_name in enumerate(trees_to_parse):
-            # if i_file > 100:
-            #     continue
-
-            if i_file%100==0:
-                print('Loading the {} file out of total {} files: {}'.format(i_file, number_files, tree_file_name))
-
-            news_id = get_root_id(tree_file_name)
-            if news_id not in self.news_ids_to_consider:
-                continue
-
-            graph_data = read_graph_obj(directed, news_id, hist_len, neg_size, save_graph_path, tree_file_name,
-                                        self.tlp_flag, self.trend_prediction)
-            # graph_data = DataHelper(tree_file_name, neg_size, hist_len, directed, tlp_flag=tlp_flag,
-            #                         trend_pred_flag=trend_prediction)
+        ## XXX ## self.node_dim * 128 ==> feature-dim * 128
+        # self.node_emb = Variable(torch.from_numpy(np.random.uniform(
+        #     -1. / np.sqrt(self.node_dim), 1. / np.sqrt(self.node_dim), (self.node_dim, emb_size))).type(
+        #     FType), requires_grad=True)
 
 
-            self.graph_data_dict[news_id] = graph_data
-            self.node_dim_dict[news_id] = graph_data.get_node_dim()
-            self.max_d_time_dict[news_id] = graph_data.get_max_d_time()
-            # graph_id += 1
+        ## ??? ## self.node_dim ge 1 ==> a single weight
+        # self.delta_s = Variable((torch.zeros(self.node_dim) + 1.).type(FType), requires_grad=True)
+        # self.delta_t = Variable((torch.zeros(self.node_dim) + 1.).type(FType), requires_grad=True)
+        self.delta_s = Variable((torch.zeros(1) + 1.).type(FType), requires_grad=True)
+        self.delta_t = Variable((torch.zeros(1) + 1.).type(FType), requires_grad=True)
 
-        # Twitter15: 1490  vs 983
-        # assert len(self.news_ids_to_consider)==len(list(self.graph_data_dict.keys()))
+        self.att_param = Variable(torch.diag(torch.from_numpy(np.random.uniform(
+            -1. / np.sqrt(emb_size), 1. / np.sqrt(emb_size), (emb_size,))).type(
+            FType)), requires_grad=True)
 
-        # self.graph_num = graph_id# the number of graph-data + 1
-        self.node_dim = int(np.max(list(self.node_dim_dict.values()))) ## Check this: the number of nodes in all graphs?
-        self.max_d_time = np.max(list(self.max_d_time_dict.values()))## ??? ##
+        self.zeta = Variable((torch.ones(1)).type(FType), requires_grad=True)
+        self.gamma = Variable((torch.ones(1)).type(FType), requires_grad=True)
+        self.theta = Variable((torch.ones(1)).type(FType), requires_grad=True)
 
-        # if torch.cuda.is_available():
-        #     with torch.cuda.device(DID):
-        #         ## XXX ##
-        #         self.node_emb = Variable(torch.from_numpy(np.random.uniform(
-        #             -1. / np.sqrt(self.node_dim), 1. / np.sqrt(self.node_dim), (self.node_dim, emb_size))).type(
-        #             FType).cuda(), requires_grad=True)
-        #
-        #         ## XXX ##
-        #         self.delta_s = Variable((torch.zeros(self.node_dim) + 1.).type(FType).cuda(), requires_grad=True)
-        #         self.delta_t = Variable((torch.zeros(self.node_dim) + 1.).type(FType).cuda(), requires_grad=True)
-        #
-        #         self.zeta = Variable((torch.ones(1)).type(FType).cuda(), requires_grad=True)
-        #         self.gamma = Variable((torch.ones(1)).type(FType).cuda(), requires_grad=True)
-        #         self.theta = Variable((torch.ones(1)).type(FType).cuda(), requires_grad=True)
-        #
-        #         self.gat_hidden_size = 128
-        #
-        #         self.global_att_linear_layer = torch.nn.Linear(self.gat_hidden_size, 1).cuda()
-        #
-        #         self.W = torch.nn.Parameter(torch.zeros(size=(self.emb_size, self.gat_hidden_size))).cuda()
-        #         torch.nn.init.xavier_uniform_(self.W.data, gain=1.414)
-        #         self.a = torch.nn.Parameter(torch.zeros(size=(2 * self.gat_hidden_size, 1))).cuda()
-        #         torch.nn.init.xavier_uniform_(self.a.data, gain=1.414)
-        #
-        #         self.leakyrelu = torch.nn.LeakyReLU(0.2)  # alpha =0.2 for leakyrelu
-        #
-        # else:
-        if True:
-            print('no gpu')
-            ## XXX ##
-            self.node_emb = Variable(torch.from_numpy(np.random.uniform(
-                -1. / np.sqrt(self.node_dim), 1. / np.sqrt(self.node_dim), (self.node_dim, emb_size))).type(
-                FType), requires_grad=True)
+        self.global_att_linear_layer = torch.nn.Linear(self.gat_hidden_size, 1)
 
-            ## XXX ##
-            self.delta_s = Variable((torch.zeros(self.node_dim) + 1.).type(FType), requires_grad=True)
-            self.delta_t = Variable((torch.zeros(self.node_dim) + 1.).type(FType), requires_grad=True)
+        self.W = torch.nn.Parameter(torch.zeros(size=(self.emb_size, self.gat_hidden_size)),requires_grad=True)
+        torch.nn.init.xavier_uniform_(self.W.data, gain=1.414)
+        self.fts2emb = nn.Linear(self.num_user_features, self.emb_size)
+        # self.fts2emb = torch.nn.Parameter(torch.zeros(size=(self.num_user_features, self.emb_size)), requires_grad=True)
+        # torch.nn.init.xavier_uniform_(self.fts2emb.data, gain=1.414)
 
-            self.att_param = Variable(torch.diag(torch.from_numpy(np.random.uniform(
-                -1. / np.sqrt(emb_size), 1. / np.sqrt(emb_size), (emb_size,))).type(
-                FType)), requires_grad=True)
+        # self.W1 = torch.nn.Parameter(torch.zeros(size=(self.node_dim, 1)),requires_grad=True)# over all nodes
+        # torch.nn.init.xavier_uniform_(self.W1.data, gain=1.414)
+        self.user_emb_output = torch.nn.Parameter(torch.zeros(size=(emb_size, self.output_dim)),requires_grad=True) # over all emb-dimensions
+        torch.nn.init.xavier_uniform_(self.user_emb_output.data, gain=1.414)
 
-            self.zeta = Variable((torch.ones(1)).type(FType), requires_grad=True)
-            self.gamma = Variable((torch.ones(1)).type(FType), requires_grad=True)
-            self.theta = Variable((torch.ones(1)).type(FType), requires_grad=True)
 
-            self.global_att_linear_layer = torch.nn.Linear(self.gat_hidden_size, 1)
+        self.a = torch.nn.Parameter(torch.zeros(size=(2 * self.gat_hidden_size, 1)))
+        torch.nn.init.xavier_uniform_(self.a.data, gain=1.414)
 
-            self.W = torch.nn.Parameter(torch.zeros(size=(self.emb_size, self.gat_hidden_size)),requires_grad=True)
-            torch.nn.init.xavier_uniform_(self.W.data, gain=1.414)
-            self.W1 = torch.nn.Parameter(torch.zeros(size=(self.node_dim, 1)),requires_grad=True)# over all nodes
-            torch.nn.init.xavier_uniform_(self.W1.data, gain=1.414)
-            self.W2 = torch.nn.Parameter(torch.zeros(size=(emb_size, self.output_dim)),requires_grad=True) # over all emb-dimensions
-            torch.nn.init.xavier_uniform_(self.W2.data, gain=1.414)
-            self.W3 = torch.nn.Parameter(torch.zeros(size=(emb_size, emb_size)),requires_grad=True)
-            torch.nn.init.xavier_uniform_(self.W3.data, gain=1.414)
+        self.leakyrelu = torch.nn.LeakyReLU(0.2)  # alpha =0.2 for leakyrelu
 
-            # self.W = nn.Linear(self.emb_size, self.gat_hidden_size)
-            # self.W1 = nn.Linear(self.node_dim, 1)
-            # self.W2 = nn.Linear(emb_size, self.output_dim)
-            # self.W3 = nn.Linear(emb_size, emb_size)
-
-            self.a = torch.nn.Parameter(torch.zeros(size=(2 * self.gat_hidden_size, 1)))
-            torch.nn.init.xavier_uniform_(self.a.data, gain=1.414)
-
-            self.leakyrelu = torch.nn.LeakyReLU(0.2)  # alpha =0.2 for leakyrelu
+        para_to_opt = [self.delta_s, self.delta_t, self.att_param, self.zeta,self.gamma,self.theta,self.W, self.user_emb_output, self.a] \
+                      + list(self.fts2emb.parameters()) + list(self.global_att_linear_layer.parameters())
 
         if self.optim == 'SGD':
-            self.opt = SGD(lr=learning_rate,momentum=0.9,weight_decay=0.01,
-                           params=[self.node_emb, self.delta_s, self.delta_t,
-                                   self.zeta,self.gamma,self.theta,
-                                   self.W, self.W1, self.W2, self.W3
-                                   ])
+            self.opt = SGD(lr=learning_rate,momentum=0.9,weight_decay=0.01, params=para_to_opt)
         elif self.optim == 'Adam':
-            self.opt = Adam(lr=learning_rate, weight_decay=0.01,
-                            params=[self.node_emb, self.delta_s, self.delta_t,
-                                    self.zeta,self.gamma,self.theta,
-                                    self.W, self.W1, self.W2, self.W3
-                                    ])
+            self.opt = Adam(lr=learning_rate, weight_decay=0.01, params=para_to_opt)
 
-        # self.loss = torch.FloatTensor()
-        # self.micro_loss = torch.FloatTensor()
-        # self.macro_loss = torch.FloatTensor()
         self.global_attention = Variable((torch.zeros(1)).type(FType))## XXX ##
+
+    def get_emb_from_idx(self, s_nodes, num=1):
+
+        if torch.is_tensor(s_nodes):
+            batch = s_nodes.size()[0]
+            s_nodes = s_nodes.numpy()
+
+        if num==1:
+            # (bach, emb_dim)
+            s_node_fts = torch.FloatTensor([self.preprocessed_user_fts[user_id] for user_id in s_nodes])
+        else:
+            # (bach, num, emb_dim)
+            s_node_fts = torch.FloatTensor(
+                [self.preprocessed_user_fts[user_id] for hist in s_nodes for user_id in hist]).view(batch, num, -1)
+        s_node_emb = self.fts2emb(s_node_fts)  # (bach, emb_dim)
+        return s_node_emb
+
 
     def local_forward(self, s_nodes, t_nodes, e_times,
                       s_h_nodes, s_h_times, s_h_time_mask,
                       t_h_nodes, t_h_times, t_h_time_mask,
                       s_neg_node,t_neg_node,news_id):
-        batch = s_nodes.size()[0]
-        s_node_emb = self.node_emb.index_select(0, Variable(s_nodes.view(-1))).view(batch, -1)  # (bach, emb_dim)
-        t_node_emb = self.node_emb.index_select(0, Variable(t_nodes.view(-1))).view(batch, -1)
-        s_h_node_emb = self.node_emb.index_select(0, Variable(s_h_nodes.view(-1))).view(batch, self.hist_len,-1)
-        t_h_node_emb = self.node_emb.index_select(0, Variable(t_h_nodes.view(-1))).view(batch, self.hist_len, -1)
 
-        delta_s = self.delta_s.index_select(0, Variable(s_nodes.view(-1))).unsqueeze(1)  # (b,1)
-        delta_t = self.delta_s.index_select(0, Variable(t_nodes.view(-1))).unsqueeze(1)  # TODO: delta_t ???
+        s_node_emb = self.get_emb_from_idx(s_nodes)
+        t_node_emb = self.get_emb_from_idx(t_nodes)
+        s_h_node_emb = self.get_emb_from_idx(s_h_nodes,num=self.hist_len)
+        t_h_node_emb = self.get_emb_from_idx(t_h_nodes,num=self.hist_len)
+
+        # s_node_emb = self.node_emb.index_select(0, Variable(s_nodes.view(-1))).view(batch, -1)  # (bach, emb_dim)
+        # t_node_emb = self.node_emb.index_select(0, Variable(t_nodes.view(-1))).view(batch, -1)
+        # s_h_node_emb = self.node_emb.index_select(0, Variable(s_h_nodes.view(-1))).view(batch, self.hist_len,-1)
+        # t_h_node_emb = self.node_emb.index_select(0, Variable(t_h_nodes.view(-1))).view(batch, self.hist_len, -1)
+
+
+        delta_s = self.delta_s#.index_select(0, Variable(s_nodes.view(-1))).unsqueeze(1)  # (b,1)
+        delta_t = self.delta_s#.index_select(0, Variable(t_nodes.view(-1))).unsqueeze(1)  # TODO: delta_t ???
+
         d_time_s = torch.abs(e_times.unsqueeze(1) - s_h_times)  # (batch, hist_len)
         d_time_t = torch.abs(e_times.unsqueeze(1) - t_h_times)  # (batch, hist_len)
 
         ## XXX ##
         max_d_time = self.max_d_time_dict[news_id]
-        delta_s = torch.tanh(delta_s / max_d_time)
-        delta_t = torch.tanh(delta_t / max_d_time)
+        # delta_s = torch.tanh(delta_s / max_d_time)
+        # delta_t = torch.tanh(delta_t / max_d_time)
         d_time_s = torch.tanh(d_time_s / max_d_time)
         d_time_t = torch.tanh(d_time_t / max_d_time)
 
@@ -321,8 +216,8 @@ class MMDNE(nn.Module):
 
         # global_att_s = 0.5
         # global_att_t = 0.5
-        p_mu = nn.Bilinear(tuple(map(tuple, s_node_emb.detach().numpy())), tuple(map(tuple, t_node_emb.detach().numpy())), 1)
-        # p_mu = ((s_node_emb - t_node_emb) ** 2).sum(dim=1).neg()  # (batch, 1)
+        # p_mu = nn.Bilinear(tuple(map(tuple, s_node_emb.detach().numpy())), tuple(map(tuple, t_node_emb.detach().numpy())), 1)
+        p_mu = ((s_node_emb - t_node_emb) ** 2).sum(dim=1).neg()  # (batch, 1)
         p_alpha_s = ((s_h_node_emb - t_node_emb.unsqueeze(1)) ** 2).sum(dim=2).neg()   # (batch, h_len)
         p_alpha_t = ((t_h_node_emb - s_node_emb.unsqueeze(1)) ** 2).sum(dim=2).neg()
 
@@ -336,8 +231,11 @@ class MMDNE(nn.Module):
                    + aaa \
                    + bbb # remove the history of t_node
 
-        s_n_node_emb = self.node_emb.index_select(0, Variable(s_neg_node.view(-1))).view(batch, self.neg_size, -1)
-        t_n_node_emb = self.node_emb.index_select(0, Variable(t_neg_node.view(-1))).view(batch, self.neg_size, -1)
+        # s_n_node_emb = self.node_emb.index_select(0, Variable(s_neg_node.view(-1))).view(batch, self.neg_size, -1)
+        # t_n_node_emb = self.node_emb.index_select(0, Variable(t_neg_node.view(-1))).view(batch, self.neg_size, -1)
+
+        s_n_node_emb = self.get_emb_from_idx(s_neg_node, num=self.neg_size)
+        t_n_node_emb = self.get_emb_from_idx(t_neg_node, num=self.neg_size)
 
         n_mu_s = ((s_node_emb.unsqueeze(1) - t_n_node_emb) ** 2).sum(dim=2).neg()  # (batch, neg_len)
         n_mu_t = ((t_node_emb.unsqueeze(1) - s_n_node_emb) ** 2).sum(dim=2).neg()
@@ -357,9 +255,13 @@ class MMDNE(nn.Module):
         return p_lambda, n_lambda_s, n_lambda_t  # max p_lambda, min n_lambda
 
     def global_forward(self, s_nodes, t_nodes, e_times, delta_n_true, node_sum, edge_last_time_sum):
-        batch = s_nodes.size()[0]
-        s_node_emb = self.node_emb.index_select(0, Variable(s_nodes.view(-1))).view(batch, -1)  # (bach, emb_dim)
-        t_node_emb = self.node_emb.index_select(0, Variable(t_nodes.view(-1))).view(batch, -1)
+        # batch = s_nodes.size()[0]
+        #
+        # s_node_emb = self.node_emb.index_select(0, Variable(s_nodes.view(-1))).view(batch, -1)  # (bach, emb_dim)
+        # t_node_emb = self.node_emb.index_select(0, Variable(t_nodes.view(-1))).view(batch, -1)
+        s_node_emb = self.get_emb_from_idx(s_nodes)
+        t_node_emb = self.get_emb_from_idx(t_nodes)
+
 
         beta = torch.sigmoid(((s_node_emb - t_node_emb) ** 2).sum(dim=1).neg())  # (batch,1) Equation-11
 
@@ -372,28 +274,17 @@ class MMDNE(nn.Module):
                    s_h_nodes, s_h_times, s_h_time_mask,
                    t_h_nodes, t_h_times, t_h_time_mask,
                    neg_s_node,neg_t_node,news_id):
-        # if torch.cuda.is_available():
-        #     with torch.cuda.device(DID):
-        #         p_lambdas, n_lambdas_s, n_lambdas_t = self.local_forward(s_nodes, t_nodes, e_times,
-        #                                                              s_h_nodes, s_h_times, s_h_time_mask,
-        #                                                              t_h_nodes, t_h_times, t_h_time_mask,
-        #                                                              neg_s_node, neg_t_node)
-        #
-        #         loss = - torch.log(p_lambdas.sigmoid() + 1e-6) \
-        #                - torch.log(n_lambdas_s.neg().sigmoid() + 1e-6).sum(dim=1) \
-        #                - torch.log(n_lambdas_t.neg().sigmoid() + 1e-6).sum(dim=1)
-        #
-        # else:
-        if True:
-            p_lambdas, n_lambdas_s, n_lambdas_t = self.local_forward(s_nodes, t_nodes, e_times,
-                                                                     s_h_nodes, s_h_times, s_h_time_mask,
-                                                                     t_h_nodes, t_h_times, t_h_time_mask,
-                                                                     neg_s_node, neg_t_node,news_id)
 
-            aaa  =  - torch.log(p_lambdas.sigmoid() + 1e-6)
-            bbb = - torch.log(n_lambdas_s.neg().sigmoid() + 1e-6).sum(dim=1)
-            ccc = - torch.log(n_lambdas_t.neg().sigmoid() + 1e-6).sum(dim=1)
-            loss =  aaa + bbb + ccc # remove the history of t_node, i.e., ccc
+
+        p_lambdas, n_lambdas_s, n_lambdas_t = self.local_forward(s_nodes, t_nodes, e_times,
+                                                                 s_h_nodes, s_h_times, s_h_time_mask,
+                                                                 t_h_nodes, t_h_times, t_h_time_mask,
+                                                                 neg_s_node, neg_t_node,news_id)
+
+        aaa  =  - torch.log(p_lambdas.sigmoid() + 1e-6)
+        bbb = - torch.log(n_lambdas_s.neg().sigmoid() + 1e-6).sum(dim=1)
+        ccc = - torch.log(n_lambdas_t.neg().sigmoid() + 1e-6).sum(dim=1)
+        loss =  aaa + bbb + ccc # remove the history of t_node, i.e., ccc
 
         # assert not torch.isnan(aaa).any()
         # assert not torch.isnan(bbb).any()
@@ -409,11 +300,19 @@ class MMDNE(nn.Module):
         return loss
 
     def veracity_predict(self, news_id):
-        node_dim = self.node_dim_dict[news_id]
-        aaa = torch.mm(torch.transpose(self.node_emb[:node_dim+1,:], dim0=1, dim1=0), self.W1[:node_dim+1,:])
-        bbb = torch.mm(torch.transpose(aaa, dim0=1, dim1=0), self.W2)
-        ccc = F.log_softmax(bbb, dim=1)
-        return ccc
+
+        all_user_id = self.graph_data_dict[news_id].node_list
+        all_node_emb = self.get_emb_from_idx(all_user_id)
+        all_node_emb_pool = torch.mean(all_node_emb,dim=0).view(1,-1)# (1, emb_dim)
+        output = F.log_softmax(torch.mm(all_node_emb_pool, self.user_emb_output), dim=1)
+        # output = F.log_softmax(self.user_emb_output(all_node_emb_pool),dim=1)
+
+        # node_dim = self.node_dim_dict[news_id]
+        # aaa = torch.mm(torch.transpose(self.node_emb[:node_dim+1,:], dim0=1, dim1=0), self.W1[:node_dim+1,:])
+        # bbb = torch.mm(torch.transpose(aaa, dim0=1, dim1=0), self.W2)
+        # ccc = F.log_softmax(bbb, dim=1)
+
+        return output
 
     def veracity_loss(self, news_id):
         output = self.veracity_predict(news_id)
@@ -458,13 +357,14 @@ class MMDNE(nn.Module):
             global_loss = self.global_loss(s_nodes, t_nodes, e_times,
                                            delta_e_true, delta_n_true, node_sum, edge_last_time_sum)
             vera_loss = self.veracity_loss(news_id)
+            # vera_loss  =  0
 
             weighted_local_loss = self.epsilon1 * local_loss.sum()
             weighted_global_loss = self.epsilon2 * global_loss.sum()
             weighted_vera_loss = self.epsilon * vera_loss
 
             # loss = (1-self.epsilon)*local_loss.sum() + self.epsilon * global_loss.sum()
-            loss = vera_loss + weighted_local_loss + weighted_global_loss # epsilon=10
+            loss = weighted_local_loss + weighted_global_loss# + weighted_vera_loss # epsilon=10
 
             loss.backward()
             self.opt.step()
@@ -485,7 +385,7 @@ class MMDNE(nn.Module):
             for num, news_id in enumerate(news_id_list):
                 if news_id not in self.train_ids:
                     continue
-
+                # print('news_id: ',news_id)
                 ## for each graph
                 graph_data = self.graph_data_dict[news_id]
                 loader = DataLoader(graph_data, batch_size=self.batch, shuffle=True, num_workers=10)
@@ -510,29 +410,30 @@ class MMDNE(nn.Module):
                     #     )
                     #     sys.stdout.flush()
 
-                    if torch.cuda.is_available():
-                        with torch.cuda.device(DID):
-                            batch_loss, batch_local_loss, batch_global_loss, batch_vera_loss = \
-                                self.update(sample_batched['source_node'].type(LType).cuda(),
-                                            sample_batched['target_node'].type(LType).cuda(),
-                                            sample_batched['event_time'].type(FType).cuda(),
-                                            sample_batched['s_history_nodes'].type(LType).cuda(),
-                                            sample_batched['s_history_times'].type(FType).cuda(),
-                                            sample_batched['s_history_masks'].type(FType).cuda(),
-                                            sample_batched['t_history_nodes'].type(LType).cuda(),
-                                            sample_batched['t_history_times'].type(FType).cuda(),
-                                            sample_batched['t_history_masks'].type(FType).cuda(),
-                                            sample_batched['neg_s_nodes'].type(LType).cuda(),
-                                            sample_batched['neg_t_nodes'].type(LType).cuda(),
-                                            sample_batched['delta_e_true'].type(FType).cuda(),
-                                            sample_batched['delta_n_true'].type(FType).cuda(),
-                                            sample_batched['node_sum'].type(FType).cuda(),
-                                            sample_batched['edge_last_time_sum'].type(FType).cuda(),
-                                            news_id
-                                            )
-                    else:
+                    # if torch.cuda.is_available():
+                    #     with torch.cuda.device(DID):
+                    #         batch_loss, batch_local_loss, batch_global_loss, batch_vera_loss = \
+                    #             self.update(sample_batched['source_node'].type(LType).cuda(),
+                    #                         sample_batched['target_node'].type(LType).cuda(),
+                    #                         sample_batched['event_time'].type(FType).cuda(),
+                    #                         sample_batched['s_history_nodes'].type(LType).cuda(),
+                    #                         sample_batched['s_history_times'].type(FType).cuda(),
+                    #                         sample_batched['s_history_masks'].type(FType).cuda(),
+                    #                         sample_batched['t_history_nodes'].type(LType).cuda(),
+                    #                         sample_batched['t_history_times'].type(FType).cuda(),
+                    #                         sample_batched['t_history_masks'].type(FType).cuda(),
+                    #                         sample_batched['neg_s_nodes'].type(LType).cuda(),
+                    #                         sample_batched['neg_t_nodes'].type(LType).cuda(),
+                    #                         sample_batched['delta_e_true'].type(FType).cuda(),
+                    #                         sample_batched['delta_n_true'].type(FType).cuda(),
+                    #                         sample_batched['node_sum'].type(FType).cuda(),
+                    #                         sample_batched['edge_last_time_sum'].type(FType).cuda(),
+                    #                         news_id
+                    #                         )
+                    # else:
+                    if True:
                         batch_loss, batch_local_loss, batch_global_loss, batch_vera_loss = \
-                            self.update(sample_batched['source_node'].type(LType),
+                            self.update(sample_batched['source_node'],#.type(LType),
                                         sample_batched['target_node'].type(LType),
                                         sample_batched['event_time'].type(FType),
                                         sample_batched['s_history_nodes'].type(LType),
@@ -659,7 +560,7 @@ if __name__ == '__main__':
         'tlp_flag':False,
         'trend_prediction':False,
         'epsilon1': 1, # local loss
-        'epsilon2': 10,# global loss
+        'epsilon2': 1,# global loss
         'epsilon':1000}
     print ('parameters: \r\n{}'.format(parameters_dict))
 
@@ -689,8 +590,8 @@ if __name__ == '__main__':
                   epsilon1=parameters_dict['epsilon1'],
                   epsilon2=parameters_dict['epsilon2'],
                   epsilon=parameters_dict['epsilon'])
-    with autograd.detect_anomaly():
-        mmdne.train_func()
+    # with autograd.detect_anomaly():
+    mmdne.train_func()
 
     print ('parameters: \r\n{}'.format(parameters_dict))
 
