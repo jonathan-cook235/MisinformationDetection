@@ -64,6 +64,7 @@ class MMDNE(nn.Module):
         else:
             self.output_dim = 4
 
+        ## obtain data-related model parameters
         self.graph_data_dict, self.node_dim_dict, self.max_d_time_dict, \
         self.node_dim, self.max_d_time, self.train_ids, self.val_ids, self.test_ids, \
         self.labels, self.news_ids_to_consider, \
@@ -72,17 +73,9 @@ class MMDNE(nn.Module):
             create_dataset(directed, file_path, hist_len, neg_size, save_graph_path,
                            only_binary, seed, tlp_flag, trend_prediction)
 
-        ## XXX ## self.node_dim * 128 ==> feature-dim * 128
-        # self.node_emb = Variable(torch.from_numpy(np.random.uniform(
-        #     -1. / np.sqrt(self.node_dim), 1. / np.sqrt(self.node_dim), (self.node_dim, emb_size))).type(
-        #     FType), requires_grad=True)
-
-
-        ## ??? ## self.node_dim ge 1 ==> a single weight
-        # self.delta_s = Variable((torch.zeros(self.node_dim) + 1.).type(FType), requires_grad=True)
-        # self.delta_t = Variable((torch.zeros(self.node_dim) + 1.).type(FType), requires_grad=True)
-        self.delta_s = Variable((torch.zeros(1) + 1.).type(FType), requires_grad=True)
-        self.delta_t = Variable((torch.zeros(1) + 1.).type(FType), requires_grad=True)
+        ## initialize model trainable parameters
+        self.delta_s = Variable((torch.ones(1)).type(FType), requires_grad=True)
+        self.delta_t = Variable((torch.ones(1)).type(FType), requires_grad=True)
 
         self.att_param = Variable(torch.diag(torch.from_numpy(np.random.uniform(
             -1. / np.sqrt(emb_size), 1. / np.sqrt(emb_size), (emb_size,))).type(
@@ -92,34 +85,26 @@ class MMDNE(nn.Module):
         self.gamma = Variable((torch.ones(1)).type(FType), requires_grad=True)
         self.theta = Variable((torch.ones(1)).type(FType), requires_grad=True)
 
-        self.global_att_linear_layer = torch.nn.Linear(self.gat_hidden_size, 1)
-
         self.W = torch.nn.Parameter(torch.zeros(size=(self.emb_size, self.gat_hidden_size)),requires_grad=True)
         torch.nn.init.xavier_uniform_(self.W.data, gain=1.414)
-        self.fts2emb = nn.Linear(self.num_user_features, self.emb_size)
-        # self.fts2emb = torch.nn.Parameter(torch.zeros(size=(self.num_user_features, self.emb_size)), requires_grad=True)
-        # torch.nn.init.xavier_uniform_(self.fts2emb.data, gain=1.414)
-
-        # self.W1 = torch.nn.Parameter(torch.zeros(size=(self.node_dim, 1)),requires_grad=True)# over all nodes
-        # torch.nn.init.xavier_uniform_(self.W1.data, gain=1.414)
-        self.user_emb_output = torch.nn.Parameter(torch.zeros(size=(emb_size, self.output_dim)),requires_grad=True) # over all emb-dimensions
-        torch.nn.init.xavier_uniform_(self.user_emb_output.data, gain=1.414)
-
-
         self.a = torch.nn.Parameter(torch.zeros(size=(2 * self.gat_hidden_size, 1)))
         torch.nn.init.xavier_uniform_(self.a.data, gain=1.414)
 
+        self.fts2emb = nn.Linear(self.num_user_features, self.emb_size)
+        self.user_emb_output = nn.Linear(self.emb_size, self.output_dim)
+        self.global_att_linear_layer = nn.Linear(self.gat_hidden_size, 1)
+
         self.leakyrelu = torch.nn.LeakyReLU(0.2)  # alpha =0.2 for leakyrelu
 
-        para_to_opt = [self.delta_s, self.delta_t, self.att_param, self.zeta,self.gamma,self.theta,self.W, self.user_emb_output, self.a] \
-                      + list(self.fts2emb.parameters()) + list(self.global_att_linear_layer.parameters())
+        para_to_opt = [self.delta_s, self.delta_t, self.att_param, self.zeta,self.gamma,self.theta,self.W, self.a] \
+                      + list(self.fts2emb.parameters()) + list(self.global_att_linear_layer.parameters()) + list(self.user_emb_output.parameters())
 
         if self.optim == 'SGD':
             self.opt = SGD(lr=learning_rate,momentum=0.9,weight_decay=0.01, params=para_to_opt)
         elif self.optim == 'Adam':
             self.opt = Adam(lr=learning_rate, weight_decay=0.01, params=para_to_opt)
 
-        self.global_attention = Variable((torch.zeros(1)).type(FType))## XXX ##
+        # self.global_attention = Variable((torch.zeros(1)).type(FType))## XXX ##
 
     def get_emb_from_idx(self, s_nodes, num=1):
 
@@ -148,12 +133,6 @@ class MMDNE(nn.Module):
         s_h_node_emb = self.get_emb_from_idx(s_h_nodes,num=self.hist_len)
         t_h_node_emb = self.get_emb_from_idx(t_h_nodes,num=self.hist_len)
 
-        # s_node_emb = self.node_emb.index_select(0, Variable(s_nodes.view(-1))).view(batch, -1)  # (bach, emb_dim)
-        # t_node_emb = self.node_emb.index_select(0, Variable(t_nodes.view(-1))).view(batch, -1)
-        # s_h_node_emb = self.node_emb.index_select(0, Variable(s_h_nodes.view(-1))).view(batch, self.hist_len,-1)
-        # t_h_node_emb = self.node_emb.index_select(0, Variable(t_h_nodes.view(-1))).view(batch, self.hist_len, -1)
-
-
         delta_s = self.delta_s#.index_select(0, Variable(s_nodes.view(-1))).unsqueeze(1)  # (b,1)
         delta_t = self.delta_s#.index_select(0, Variable(t_nodes.view(-1))).unsqueeze(1)  # TODO: delta_t ???
 
@@ -162,10 +141,10 @@ class MMDNE(nn.Module):
 
         ## XXX ##
         max_d_time = self.max_d_time_dict[news_id]
-        # delta_s = torch.tanh(delta_s / max_d_time)
-        # delta_t = torch.tanh(delta_t / max_d_time)
-        d_time_s = torch.tanh(d_time_s / max_d_time)
-        d_time_t = torch.tanh(d_time_t / max_d_time)
+        # delta_s = self.leakyrelu(delta_s / max_d_time)
+        # delta_t = self.leakyrelu(delta_t / max_d_time)
+        d_time_s = self.leakyrelu(d_time_s / max_d_time)
+        d_time_t = self.leakyrelu(d_time_t / max_d_time)
 
         # GAT attention_rewrite
         for i in range(self.hist_len):
@@ -212,7 +191,7 @@ class MMDNE(nn.Module):
                       dim=2),dim0=1,dim1=2))),dim=1).squeeze(2)  # (dim, 2)
         global_att_s = global_att[:, 0]
         global_att_t = global_att[:, 1]
-        self.global_attention = global_att
+        # self.global_attention = global_att
 
         # global_att_s = 0.5
         # global_att_t = 0.5
@@ -304,13 +283,8 @@ class MMDNE(nn.Module):
         all_user_id = self.graph_data_dict[news_id].node_list
         all_node_emb = self.get_emb_from_idx(all_user_id)
         all_node_emb_pool = torch.mean(all_node_emb,dim=0).view(1,-1)# (1, emb_dim)
-        output = F.log_softmax(torch.mm(all_node_emb_pool, self.user_emb_output), dim=1)
-        # output = F.log_softmax(self.user_emb_output(all_node_emb_pool),dim=1)
-
-        # node_dim = self.node_dim_dict[news_id]
-        # aaa = torch.mm(torch.transpose(self.node_emb[:node_dim+1,:], dim0=1, dim1=0), self.W1[:node_dim+1,:])
-        # bbb = torch.mm(torch.transpose(aaa, dim0=1, dim1=0), self.W2)
-        # ccc = F.log_softmax(bbb, dim=1)
+        # output = F.log_softmax(torch.mm(all_node_emb_pool, self.user_emb_output), dim=1)
+        output = F.log_softmax(self.user_emb_output(all_node_emb_pool), dim=1)
 
         return output
 
@@ -590,8 +564,8 @@ if __name__ == '__main__':
                   epsilon1=parameters_dict['epsilon1'],
                   epsilon2=parameters_dict['epsilon2'],
                   epsilon=parameters_dict['epsilon'])
-    # with autograd.detect_anomaly():
-    mmdne.train_func()
+    with autograd.detect_anomaly():
+        mmdne.train_func()
 
     print ('parameters: \r\n{}'.format(parameters_dict))
 
