@@ -66,6 +66,7 @@ class DataHelper(Dataset):
                     # if buggy dataset, and we haven't found the time_shift yet
                     time_shift = -time_out
                 if user_in == 'ROOT':
+                    self.first_node = user_out
                     continue # exclude the root marker
 
                 if user_in < 0 or user_out < 0:
