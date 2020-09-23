@@ -39,8 +39,8 @@ def load_labels(dataset_dir):
     with open(os.path.join(dataset_dir, "label.txt")) as label_file:
         for line in label_file.readlines():
             label, news_id = line.split(":")
-            labels[int(news_id)] = label
-            # labels[str(int(news_id))] = label
+            # labels[int(news_id)] = label
+            labels[str(int(news_id))] = label#str
     return labels
 
 def get_user_and_tweet_ids_in_train(trees_to_parse, train_ids):
@@ -82,7 +82,8 @@ def load_tweet_features(DATA_DIR = "../rumor_detection_acl2017"):
                                     delimiter=';',names=None).id
     tweet_features = {}
     for i, tweet_id in enumerate(tweet_features_id):
-        tweet_features[int(tweet_id)] = {"embedding":text_embeddings[i]}
+        # tweet_features[int(tweet_id)] = {"embedding":text_embeddings[i]}
+        tweet_features[str(int(tweet_id))] = {"embedding": text_embeddings[i]}#str
 
     return tweet_features
 
@@ -98,8 +99,10 @@ def load_user_features(DATA_DIR = "../rumor_detection_acl2017"):
         user_feature_names = text_file.readline().rstrip('\n').split(';')
         for line in text_file.readlines():
             features = line.rstrip('\n').split(";")
-            user_features[int(features[0])] = {user_feature_names[i]: features[i]
-                                                for i in range(1, len(features))}
+            # user_features[int(features[0])] = {user_feature_names[i]: features[i]
+            #                                     for i in range(1, len(features))}
+            user_features[str(int(features[0]))] = {user_feature_names[i]: features[i]
+                                               for i in range(1, len(features))}#str
 
     return user_features
 

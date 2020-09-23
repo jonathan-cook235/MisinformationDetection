@@ -88,8 +88,8 @@ class MMDNE(nn.Module):
         # self.a = torch.nn.Parameter(torch.zeros(size=(2 * self.gat_hidden_size, 1)))
         torch.nn.init.xavier_uniform_(self.a.data, gain=1.414)
 
-        self.fts2emb = nn.Linear(self.num_user_features, self.emb_size) #usage: y = self.fts2emb(x)
-        # self.fts2emb = nn.Linear(self.num_user_features+self.num_tweet_features, self.emb_size) #usage: y = self.fts2emb(x)
+        # self.fts2emb = nn.Linear(self.num_user_features, self.emb_size) #usage: y = self.fts2emb(x)
+        self.fts2emb = nn.Linear(self.num_user_features+self.num_tweet_features, self.emb_size) #usage: y = self.fts2emb(x)
         self.bilinear = nn.Bilinear(self.emb_size, self.emb_size, 1)
         self.aggre_emb = nn.Linear(3*self.emb_size, self.emb_size)
         self.node_emb_output = nn.Linear(self.emb_size, self.output_dim)
@@ -112,9 +112,9 @@ class MMDNE(nn.Module):
         graph_data = self.graph_data_dict[news_id]
         user_tweet_dict = graph_data.user_tweet_dict
 
-        if torch.is_tensor(user_id):
-            batch_size = user_id.size()[0]
-            user_id = user_id.numpy()
+        # if torch.is_tensor(user_id):#int
+        #     batch_size = user_id.size()[0]
+        #     user_id = user_id.numpy()
 
         if dim_num==1:
             ##  only one node-id
@@ -131,6 +131,7 @@ class MMDNE(nn.Module):
 
             elif dim_num==3 and dim_size:
                 # a three-dimensional vector of node-id; return (bach-size, dim_size, emb_dim)
+                batch_size = len(user_id[0])#str
                 tweet_id = [user_tweet_dict[user_] for hist in user_id for user_ in hist]
                 user_fts = torch.FloatTensor([self.preprocessed_user_fts[user_] for hist in user_id for user_ in hist])#
                 tweet_fts = torch.FloatTensor([self.preprocessed_tweet_fts[tweet_] for tweet_ in tweet_id])#.view(self.batch_size, dim_size, -1)
@@ -138,8 +139,8 @@ class MMDNE(nn.Module):
                 user_fts = user_fts.view(batch_size, dim_size, -1)
                 tweet_fts=tweet_fts.view(batch_size, dim_size, -1)
 
-        node_fts = user_fts
-        # node_fts = torch.cat([user_fts, tweet_fts], dim=-1)
+        # node_fts = user_fts
+        node_fts = torch.cat([user_fts, tweet_fts], dim=-1)
         node_emb = self.fts2emb(node_fts)  # (bach, emb_dim)
         return node_emb
 
@@ -331,7 +332,7 @@ class MMDNE(nn.Module):
         weighted_global_loss = self.epsilon2 * global_loss.sum()
         weighted_vera_loss = self.epsilon * vera_loss
 
-        loss = weighted_local_loss + weighted_vera_loss # + weighted_global_loss
+        loss = weighted_local_loss + weighted_vera_loss + weighted_global_loss
 
         loss.backward()
         self.opt.step()
@@ -373,18 +374,38 @@ class MMDNE(nn.Module):
                     #     )
                     #     sys.stdout.flush()
 
+                    # batch_loss, batch_local_loss, batch_global_loss, batch_vera_loss = \
+                    #     self.update(sample_batched['source_node'].type(LType),
+                    #                 sample_batched['target_node'].type(LType),
+                    #                 sample_batched['event_time'].type(FType),
+                    #                 sample_batched['s_history_nodes'].type(LType),
+                    #                 sample_batched['s_history_times'].type(FType),
+                    #                 sample_batched['s_history_masks'].type(FType),
+                    #                 sample_batched['t_history_nodes'].type(LType),
+                    #                 sample_batched['t_history_times'].type(FType),
+                    #                 sample_batched['t_history_masks'].type(FType),
+                    #                 sample_batched['neg_s_nodes'].type(LType),
+                    #                 sample_batched['neg_t_nodes'].type(LType),
+                    #                 sample_batched['delta_e_true'].type(FType),
+                    #                 sample_batched['delta_n_true'].type(FType),
+                    #                 sample_batched['node_sum'].type(FType),
+                    #                 sample_batched['edge_last_time_sum'].type(FType),
+                    #                 news_id
+                    #                 )
+
+                    #str
                     batch_loss, batch_local_loss, batch_global_loss, batch_vera_loss = \
-                        self.update(sample_batched['source_node'].type(LType),
-                                    sample_batched['target_node'].type(LType),
+                        self.update(sample_batched['source_node'],
+                                    sample_batched['target_node'],
                                     sample_batched['event_time'].type(FType),
-                                    sample_batched['s_history_nodes'].type(LType),
+                                    sample_batched['s_history_nodes'],
                                     sample_batched['s_history_times'].type(FType),
                                     sample_batched['s_history_masks'].type(FType),
-                                    sample_batched['t_history_nodes'].type(LType),
+                                    sample_batched['t_history_nodes'],
                                     sample_batched['t_history_times'].type(FType),
                                     sample_batched['t_history_masks'].type(FType),
-                                    sample_batched['neg_s_nodes'].type(LType),
-                                    sample_batched['neg_t_nodes'].type(LType),
+                                    sample_batched['neg_s_nodes'],
+                                    sample_batched['neg_t_nodes'],
                                     sample_batched['delta_e_true'].type(FType),
                                     sample_batched['delta_n_true'].type(FType),
                                     sample_batched['node_sum'].type(FType),
