@@ -45,7 +45,7 @@ class MMDNE(nn.Module):
         self.only_binary = only_binary
 
         self.epochs = epoch_num
-        self.batch = batch_size
+        self.batch_size = batch_size
         self.save_step = save_step
         self.save_embedding_path = save_embedding_path
 
@@ -89,9 +89,10 @@ class MMDNE(nn.Module):
         torch.nn.init.xavier_uniform_(self.a.data, gain=1.414)
 
         self.fts2emb = nn.Linear(self.num_user_features, self.emb_size) #usage: y = self.fts2emb(x)
+        # self.fts2emb = nn.Linear(self.num_user_features+self.num_tweet_features, self.emb_size) #usage: y = self.fts2emb(x)
+        self.bilinear = nn.Bilinear(self.emb_size, self.emb_size, 1)
         self.aggre_emb = nn.Linear(3*self.emb_size, self.emb_size)
         self.node_emb_output = nn.Linear(self.emb_size, self.output_dim)
-        self.bilinear = nn.Bilinear(self.emb_size, self.emb_size, 1)
 
         self.dropout_layer = nn.Dropout(self.dropout)
         self.leakyrelu = torch.nn.LeakyReLU(0.2)  # alpha =0.2 for leakyrelu
@@ -106,35 +107,48 @@ class MMDNE(nn.Module):
         elif self.optim == 'Adam':
             self.opt = Adam(lr=learning_rate, weight_decay=0.01, params=para_to_opt)
 
-    def get_emb_from_idx(self, s_nodes, dim_num=1, size=None):
+    def get_emb_from_id(self, user_id, news_id, dim_num=1, dim_size=None):
 
-        if torch.is_tensor(s_nodes):
-            batch = s_nodes.size()[0]
-            s_nodes = s_nodes.numpy()
+        graph_data = self.graph_data_dict[news_id]
+        user_tweet_dict = graph_data.user_tweet_dict
 
         if dim_num==1:
             ##  only one node-id
-            s_node_fts = torch.FloatTensor(self.preprocessed_user_fts[s_nodes])
-        elif dim_num == 2:
-            # a two-dimensional vector of node-id; return (bach, emb_dim)
-            s_node_fts = torch.FloatTensor([self.preprocessed_user_fts[user_id] for user_id in s_nodes])
-        elif dim_num==3 and size:
-            # a three-dimensional vector of node-id; return (bach, size, emb_dim)
-            s_node_fts = torch.FloatTensor(
-                [self.preprocessed_user_fts[user_id] for hist in s_nodes for user_id in hist]).view(batch, size, -1)
-        s_node_emb = self.fts2emb(s_node_fts)  # (bach, emb_dim)
-        return s_node_emb
+            tweet_id = user_tweet_dict[user_id]
+            user_fts = torch.FloatTensor(self.preprocessed_user_fts[user_id])
+            tweet_fts = torch.FloatTensor(self.preprocessed_tweet_fts[tweet_id])
 
+        else:
+            if dim_num == 2:
+                # a two-dimensional vector of node-id; return (bach, emb_dim)
+                tweet_id = [user_tweet_dict[user_] for user_ in user_id]
+                user_fts = torch.FloatTensor([self.preprocessed_user_fts[user_] for user_ in user_id])
+                tweet_fts = torch.FloatTensor([self.preprocessed_tweet_fts[tweet_] for tweet_ in tweet_id])
+
+            elif dim_num==3 and dim_size:
+                # a three-dimensional vector of node-id; return (bach-size, dim_size, emb_dim)
+                batch_size =  len(user_id[0])
+                tweet_id = [user_tweet_dict[user_] for hist in user_id for user_ in hist]
+                user_fts = torch.FloatTensor([self.preprocessed_user_fts[user_] for hist in user_id for user_ in hist])#
+                tweet_fts = torch.FloatTensor([self.preprocessed_tweet_fts[tweet_] for tweet_ in tweet_id])#.view(self.batch_size, dim_size, -1)
+                # print('user_fts.size-',user_fts.size(), 'tweet_fts.size-',tweet_fts.size())
+                user_fts = user_fts.view(batch_size, dim_size, -1)
+                tweet_fts=tweet_fts.view(batch_size, dim_size, -1)
+
+        node_fts = user_fts
+        # node_fts = torch.cat([user_fts, tweet_fts], dim=-1)
+        node_emb = self.fts2emb(node_fts)  # (bach, emb_dim)
+        return node_emb
 
     def local_forward(self, s_nodes, t_nodes, e_times,
                       s_h_nodes, s_h_times, s_h_time_mask,
                       t_h_nodes, t_h_times, t_h_time_mask,
                       s_neg_node,t_neg_node,news_id):
 
-        s_node_emb = self.get_emb_from_idx(s_nodes,dim_num=2)
-        t_node_emb = self.get_emb_from_idx(t_nodes,dim_num=2)
-        s_h_node_emb = self.get_emb_from_idx(s_h_nodes,dim_num=3,size=self.hist_len)
-        # t_h_node_emb = self.get_emb_from_idx(t_h_nodes,dim_num=3,size=self.hist_len)
+        s_node_emb = self.get_emb_from_id(s_nodes,news_id, dim_num=2)
+        t_node_emb = self.get_emb_from_id(t_nodes,news_id, dim_num=2)
+        s_h_node_emb = self.get_emb_from_id(s_h_nodes,news_id, dim_num=3, dim_size=self.hist_len)
+        # t_h_node_emb = self.get_emb_from_id(t_h_nodes,news_id, dim_num=3,dim_size=self.hist_len)
 
         max_d_time = self.max_d_time_dict[news_id]
         delta_s = self.delta_s#.index_select(0, Variable(s_nodes.view(-1))).unsqueeze(1)  # (b,1)
@@ -206,8 +220,8 @@ class MMDNE(nn.Module):
                    + aaa \
                    # + bbb # remove the history of t_node
 
-        # s_n_node_emb = self.get_emb_from_idx(s_neg_node, dim_num=3, size=self.neg_size)
-        t_n_node_emb = self.get_emb_from_idx(t_neg_node,dim_num=3, size=self.neg_size)
+        # s_n_node_emb = self.get_emb_from_id(s_neg_node,news_id, dim_num=3, dim_size=self.neg_size)
+        t_n_node_emb = self.get_emb_from_id(t_neg_node,news_id,dim_num=3, dim_size=self.neg_size)
 
         n_mu_s = self.bilinear(s_node_emb.unsqueeze(1).repeat(1, self.neg_size, 1), t_n_node_emb).squeeze(-1)  # (batch, neg_len)
         # n_mu_t = self.bilinear(t_node_emb.unsqueeze(1).repeat(1, self.neg_size, 1), s_n_node_emb).squeeze(-1)
@@ -232,9 +246,9 @@ class MMDNE(nn.Module):
 
         return p_lambda, n_lambda_s#, n_lambda_t  # max p_lambda, min n_lambda
 
-    def global_forward(self, s_nodes, t_nodes, e_times, delta_n_true, node_sum, edge_last_time_sum):
-        s_node_emb = self.get_emb_from_idx(s_nodes,dim_num=2)
-        t_node_emb = self.get_emb_from_idx(t_nodes,dim_num=2)
+    def global_forward(self, s_nodes, t_nodes, e_times, delta_n_true, node_sum, edge_last_time_sum,news_id):
+        s_node_emb = self.get_emb_from_id(s_nodes,news_id,dim_num=2)
+        t_node_emb = self.get_emb_from_id(t_nodes,news_id,dim_num=2)
 
         beta = torch.sigmoid(self.bilinear(s_node_emb, t_node_emb)).squeeze(-1) # (batch) Equation-11
         delta_e_pred = beta / torch.pow(Variable(e_times)+1e-5, self.theta) * Variable(node_sum) * \
@@ -257,14 +271,10 @@ class MMDNE(nn.Module):
         # ccc = - torch.log(n_lambdas_t.neg().sigmoid() + 1e-5).sum(dim=1)
         loss =  aaa + bbb #+ ccc # remove the history of t_node, i.e., ccc
 
-        # assert not torch.isnan(aaa).any()
-        # assert not torch.isnan(bbb).any()
-        # assert not torch.isnan(ccc).any()
-
         return loss
 
-    def global_loss(self,s_nodes, t_nodes, e_times, delta_e_true, delta_n_true, node_sum, edge_last_time_sum):
-        delta_e_pred = self.global_forward(s_nodes, t_nodes, e_times, delta_n_true, node_sum, edge_last_time_sum)
+    def global_loss(self,s_nodes, t_nodes, e_times, delta_e_true, delta_n_true, node_sum, edge_last_time_sum,news_id):
+        delta_e_pred = self.global_forward(s_nodes, t_nodes, e_times, delta_n_true, node_sum, edge_last_time_sum,news_id)
         criterion = torch.nn.MSELoss()
         loss = criterion(torch.log(delta_e_pred + 1e-5), torch.log(Variable(delta_e_true) + 1e-5))
         # loss = ((delta_e_pred - Variable(delta_e_true))**2).mean(dim=-1)
@@ -273,10 +283,10 @@ class MMDNE(nn.Module):
     def veracity_predict(self, news_id):
 
         first_node_id = self.graph_data_dict[news_id].first_node
-        first_node_emb = self.get_emb_from_idx(first_node_id,dim_num=1).view(1,-1)# (1, emb_dim)
+        first_node_emb = self.get_emb_from_id(first_node_id,news_id,dim_num=1).view(1,-1)# (1, emb_dim)
 
         all_node_id = self.graph_data_dict[news_id].node_list
-        all_node_emb = self.get_emb_from_idx(all_node_id,dim_num=2)
+        all_node_emb = self.get_emb_from_id(all_node_id,news_id,dim_num=2)
 
         all_node_emb_mean = torch.mean(all_node_emb,dim=0).view(1,-1)# (1, emb_dim)
         all_node_emb_max_tpl = torch.max(all_node_emb, dim=0)
@@ -311,14 +321,14 @@ class MMDNE(nn.Module):
                                      neg_s_node, neg_t_node,news_id)
 
         global_loss = self.global_loss(s_nodes, t_nodes, e_times,
-                                       delta_e_true, delta_n_true, node_sum, edge_last_time_sum)
+                                       delta_e_true, delta_n_true, node_sum, edge_last_time_sum,news_id)
         vera_loss = self.veracity_loss(news_id)
 
         weighted_local_loss = self.epsilon1 * local_loss.sum()
         weighted_global_loss = self.epsilon2 * global_loss.sum()
         weighted_vera_loss = self.epsilon * vera_loss
 
-        loss = weighted_local_loss + weighted_global_loss + weighted_vera_loss # epsilon=10
+        loss = weighted_local_loss + weighted_vera_loss # + weighted_global_loss
 
         loss.backward()
         self.opt.step()
@@ -338,7 +348,7 @@ class MMDNE(nn.Module):
                 # print('news_id: ',news_id)
                 ## for each graph
                 graph_data = self.graph_data_dict[news_id]
-                loader = DataLoader(graph_data, batch_size=self.batch, shuffle=True, num_workers=10)
+                loader = DataLoader(graph_data, batch_size=self.batch_size, shuffle=True, num_workers=10)
 
                 total_batch_loss = 0
                 total_batch_local_loss = 0
@@ -347,10 +357,10 @@ class MMDNE(nn.Module):
                 for _, sample_batched in enumerate(loader):
                     # i_batch += 1
                     # if i_batch % 1000 == 0 and i_batch != 0:
-                    #     sys.stdout.write('\r\n' + str(i_batch * self.batch)
-                    #                      + '\tloss: ' + str(self.loss.cpu().numpy() / (self.batch * i_batch))
-                    #                      + '\tmicro_loss: ' + str(self.micro_loss.cpu().numpy() / (self.batch * i_batch))
-                    #                      + '\tmacro_loss: ' + str(self.macro_loss.cpu().numpy() / (self.batch * i_batch))
+                    #     sys.stdout.write('\r\n' + str(i_batch * self.batch_size)
+                    #                      + '\tloss: ' + str(self.loss.cpu().numpy() / (self.batch_size * i_batch))
+                    #                      + '\tmicro_loss: ' + str(self.micro_loss.cpu().numpy() / (self.batch_size * i_batch))
+                    #                      + '\tmacro_loss: ' + str(self.macro_loss.cpu().numpy() / (self.batch_size * i_batch))
                     #                      + '\r\ndelta_s:' + str(self.delta_s.mean().cpu().data.numpy())
                     #                      + '\tdelta_t:' + str(self.delta_t.mean().cpu().data.numpy())
                     #                      + '\tglobal_attention:' + str(self.global_attention.mean(dim=0).cpu().data.numpy())
@@ -363,21 +373,22 @@ class MMDNE(nn.Module):
                     batch_loss, batch_local_loss, batch_global_loss, batch_vera_loss = \
                         self.update(sample_batched['source_node'],
                                     sample_batched['target_node'],
-                                    sample_batched['event_time'],
+                                    sample_batched['event_time'].type(FType),
                                     sample_batched['s_history_nodes'],
-                                    sample_batched['s_history_times'],
-                                    sample_batched['s_history_masks'],
-                                    sample_batched['t_history_nodes'].type(LType),
-                                    sample_batched['t_history_times'],
-                                    sample_batched['t_history_masks'],
+                                    sample_batched['s_history_times'].type(FType),
+                                    sample_batched['s_history_masks'].type(FType),
+                                    sample_batched['t_history_nodes'],
+                                    sample_batched['t_history_times'].type(FType),
+                                    sample_batched['t_history_masks'].type(FType),
                                     sample_batched['neg_s_nodes'],
                                     sample_batched['neg_t_nodes'],
-                                    sample_batched['delta_e_true'],
-                                    sample_batched['delta_n_true'],
-                                    sample_batched['node_sum'],
-                                    sample_batched['edge_last_time_sum'],
+                                    sample_batched['delta_e_true'].type(FType),
+                                    sample_batched['delta_n_true'].type(FType),
+                                    sample_batched['node_sum'].type(FType),
+                                    sample_batched['edge_last_time_sum'].type(FType),
                                     news_id
                                     )
+
                     total_batch_loss += batch_loss.detach().numpy()
                     total_batch_local_loss += batch_local_loss.detach().numpy()
                     total_batch_global_loss += batch_global_loss.detach().numpy()
@@ -446,25 +457,25 @@ class MMDNE(nn.Module):
 
         return  acc, correct, n_samples
 
-    def save_node_embeddings(self, path):
-        if torch.cuda.is_available():
-            embeddings = self.node_emb.cpu().data.numpy()
-        else:
-            embeddings = self.node_emb.data.numpy()
-        ## XXX ##
-        # for count in self.node_dim:
-        #     writer = open(path, 'w')
-        #     writer.write('%d %d\n' % (self.node_dim[count], self.emb_size))
-        #     for n_idx in range(self.node_dim[count]):
-        #         writer.write(' '.join(str(d) for d in embeddings[n_idx]) + '\n')
-        #     writer.close()
-        #     return embeddings
-
-        writer = open(path, 'w')
-        writer.write('%d %d\n' % (self.node_dim, self.emb_size))
-        for n_idx in range(self.node_dim):
-            writer.write(' '.join(str(d) for d in embeddings[n_idx]) + '\n')
-        writer.close()
+    # def save_node_embeddings(self, path):
+    #     if torch.cuda.is_available():
+    #         embeddings = self.node_emb.cpu().data.numpy()
+    #     else:
+    #         embeddings = self.node_emb.data.numpy()
+    #     ## XXX ##
+    #     # for count in self.node_dim:
+    #     #     writer = open(path, 'w')
+    #     #     writer.write('%d %d\n' % (self.node_dim[count], self.emb_size))
+    #     #     for n_idx in range(self.node_dim[count]):
+    #     #         writer.write(' '.join(str(d) for d in embeddings[n_idx]) + '\n')
+    #     #     writer.close()
+    #     #     return embeddings
+    #
+    #     writer = open(path, 'w')
+    #     writer.write('%d %d\n' % (self.node_dim, self.emb_size))
+    #     for n_idx in range(self.node_dim):
+    #         writer.write(' '.join(str(d) for d in embeddings[n_idx]) + '\n')
+    #     writer.close()
 
 
 if __name__ == '__main__':

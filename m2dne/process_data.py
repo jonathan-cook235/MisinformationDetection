@@ -40,7 +40,7 @@ def load_labels(dataset_dir):
         for line in label_file.readlines():
             label, news_id = line.split(":")
             # labels[int(news_id)] = label
-            labels[int(news_id)] = label
+            labels[str(int(news_id))] = label
     return labels
 
 def get_user_and_tweet_ids_in_train(trees_to_parse, train_ids):
@@ -280,23 +280,21 @@ def get_user_tweet_fts(file_path, train_ids, trees_to_parse, only_user=False):
         with open(user_file_path, 'wb') as f:
             pickle.dump(preprocessed_user_fts, f, pickle.HIGHEST_PROTOCOL)
 
-    if only_user == True:
-        preprocessed_tweet_fts = {}
-    else:
-        tweet_file_path = os.path.join(file_path, 'processed_tweet_fts')
-        if os.path.exists(tweet_file_path):
-            num_tweet_features = Num_Tweet_Features
-            with open(tweet_file_path, 'rb') as f:
-                preprocessed_tweet_fts = pickle.load(f)
-        else:
-            tweet_ids_in_train, tweet_ids_in_train = \
-                get_user_and_tweet_ids_in_train(trees_to_parse, train_ids)
-            tweet_features = load_tweet_features()
-            preprocessed_tweet_fts, num_tweet_features = \
-                preprocess_tweet_features(tweet_features, tweet_ids_in_train)
 
-            with open(tweet_file_path, 'wb') as f:
-                pickle.dump(preprocessed_tweet_fts, f, pickle.HIGHEST_PROTOCOL)
+    tweet_file_path = os.path.join(file_path, 'processed_tweet_fts')
+    if os.path.exists(tweet_file_path):
+        num_tweet_features = Num_Tweet_Features
+        with open(tweet_file_path, 'rb') as f:
+            preprocessed_tweet_fts = pickle.load(f)
+    else:
+        tweet_ids_in_train, tweet_ids_in_train = \
+            get_user_and_tweet_ids_in_train(trees_to_parse, train_ids)
+        tweet_features = load_tweet_features()
+        preprocessed_tweet_fts, num_tweet_features = \
+            preprocess_tweet_features(tweet_features, tweet_ids_in_train)
+
+        with open(tweet_file_path, 'wb') as f:
+            pickle.dump(preprocessed_tweet_fts, f, pickle.HIGHEST_PROTOCOL)
 
     return preprocessed_tweet_fts, preprocessed_user_fts, num_tweet_features, num_user_features
 

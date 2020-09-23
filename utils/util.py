@@ -38,13 +38,16 @@ def standardize_and_turn_tensor(seq_data_preprocessed, standardize = True):
 def int_or_root(e):
     return e if e == 'ROOT' else int(e)
 
+def str_or_root(e):
+    return e if e == 'ROOT' else str(int(e))
+
 def parse_edge_line(line):
     orig, dest = line.split("->")
     orig_list = orig.split("'")
     dest_list = dest.split("'")
 
-    tweet_in, tweet_out = int_or_root(orig_list[3]), int_or_root(dest_list[3])
-    user_in, user_out = int_or_root(orig_list[1]), int_or_root(dest_list[1])
+    tweet_in, tweet_out = str_or_root(orig_list[3]), str_or_root(dest_list[3])
+    user_in, user_out = str_or_root(orig_list[1]), str_or_root(dest_list[1])
 
     time_in, time_out = float(orig_list[5]), float(dest_list[5])
 
@@ -66,7 +69,9 @@ def parse_edge_line(line):
 
 
 def get_root_id(tree_file_name):
-    return int(os.path.splitext(os.path.basename(tree_file_name))[0])
+    # return int(os.path.splitext(os.path.basename(tree_file_name))[0])
+    return str(os.path.splitext(os.path.basename(tree_file_name))[0])
+
 
 
 def get_tree_file_names(datadir):

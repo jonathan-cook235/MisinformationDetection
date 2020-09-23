@@ -51,14 +51,12 @@ class DataHelper(Dataset):
         self.time_stamp = []
         self.time_edges_dict = {}
         self.time_nodes_dict = {}
+
+        self.user_tweet_dict = {'0':'0'}#user_id:tweet_id
     
         with open(file_path, 'rt') as infile:
 
-            # Build integer node dictionary
-            ## XXX ##
-            int_node_dict = {}
-            list_of_nodes = []
-            node_id  = 0
+            # node_int  = 0
             time_shift = 0
             for line in infile.readlines():
                 tweet_in, tweet_out, user_in, user_out, time_in, time_out = util.parse_edge_line(line)
@@ -66,16 +64,33 @@ class DataHelper(Dataset):
                     # if buggy dataset, and we haven't found the time_shift yet
                     time_shift = -time_out
                 if user_in == 'ROOT':
+                    # node_int += 1
                     self.first_node = user_out
+                    self.user_tweet_dict[user_out] = tweet_out
                     continue # exclude the root marker
 
-                if user_in < 0 or user_out < 0:
-                    print(user_in, user_out)
-                s_node = user_in   # [user_in, tweet_in]
-                t_node = user_out  # [user_out, tweet_out]
 
-                # TICK-Check This: time_out  or (time_out - time_in)
-                # Refer to d_time in  local_forward
+                # if user_in == 760576918085337088 or
+
+                s_node = user_in
+                # node_int += 1
+                # s_node = node_int
+                if s_node in self.user_tweet_dict:
+                    if  tweet_in != self.user_tweet_dict[s_node]:
+                        print('s-user have multiple tweets')
+                else:
+                    self.user_tweet_dict[s_node] = tweet_in
+
+                t_node = user_out
+                # node_int += 1
+                # t_node = node_int
+                if t_node in self.user_tweet_dict:
+                    if tweet_out != self.user_tweet_dict[t_node]:
+                        print('t-user have multiple tweets')
+                else:
+                    self.user_tweet_dict[t_node] = tweet_out
+
+                # TICK-Check This: time_out  or (time_out - time_in). Refer to d_time in  local_forward
                 time_out += time_shift  # fix buggy dataset
                 assert time_out >= 0
                 # d_time = np.abs(time_out - time_in)
@@ -83,51 +98,24 @@ class DataHelper(Dataset):
                 d_time = time_out
 
                 # if user_in not in list_of_nodes:## XXX ##
-                #     int_node_dict.update({user_in : node_id})# node_id is actually an ID number starting from 0
+                #     user_tweet_dict.update({user_in : node_int})# node_int is actually an ID number starting from 1
                 #     list_of_nodes.append(user_in)
-                #     node_id += 1
+                #     node_int += 1
                 #
                 # if user_out not in list_of_nodes:
-                #     int_node_dict.update({user_out : node_id})
+                #     user_tweet_dict.update({user_out : node_int})
                 #     list_of_nodes.append(user_out)
-                #     node_id += 1
-                # #
-                # s_node = int_node_dict[user_in] ## node_index --> node_id ##
-                # t_node = int_node_dict[user_out] ## node_index --> node_id  ##
+                #     node_int += 1
+                #
+                # s_node = user_tweet_dict[user_in] ## node_index --> node_int ##
+                # t_node = user_tweet_dict[user_out] ## node_index --> node_int  ##
 
                 self.node_set.update([s_node, t_node])  # node set
-
-                if s_node not in self.degrees:
-                    self.degrees[s_node] = 0
-                if t_node not in self.degrees:
-                    self.degrees[t_node] = 0
-
-                # dblp temporal link prediction
-                # if tlp_flag:
-                #     if d_time >= 1.0:  # 2017 year
-                #         continue
-                # # eucore temporal link prediction
-                # if tlp_flag:
-                #     if d_time >= 0.631382316314:  # 2017 year
-                #         continue
-
-                # # dblp Trend Prediction
-                # if trend_pred_flag:
-                #     if d_time > 0.5:
-                #         continue
-                # # tmall Trend Prediction
-                # if trend_pred_flag:
-                #     if d_time > 0.729317:
-                #         continue
-                # eucore Trend Prediction
-                # if trend_pred_flag:
-                #     if d_time > 0.333748443337:
-                #         continue
-
                 self.edge_list.append((s_node,t_node,d_time))  # edge list
                 if not directed:
                     self.edge_list.append((t_node,s_node,d_time))
 
+                # each s_node should have a sequence of history nodes, which means s_node occurs more than once.
                 if s_node not in self.node2hist:
                     self.node2hist[s_node] = list()
                 self.node2hist[s_node].append((t_node, d_time))
@@ -150,13 +138,17 @@ class DataHelper(Dataset):
                         self.node_time_nodes[t_node][d_time] = list()
                     self.node_time_nodes[t_node][d_time].append(s_node)
 
-                if d_time > self.max_d_time:
-                    self.max_d_time = d_time  # record the max time
-
+                if s_node not in self.degrees:
+                    self.degrees[s_node] = 0
+                if t_node not in self.degrees:
+                    self.degrees[t_node] = 0
                 self.degrees[s_node] += 1
                 self.degrees[t_node] += 1
 
                 ## XXX ## avoid the same timestamp
+                if d_time > self.max_d_time:
+                    self.max_d_time = d_time  # record the max time
+
                 while d_time in self.time_stamp:
                     d_time = d_time + 1e-5 * np.random.randint(0,100)
                 self.time_stamp.append(d_time)
@@ -191,23 +183,17 @@ class DataHelper(Dataset):
         self.idx2target_id = {} #np.zeros((self.data_size,), dtype=np.int32)
         idx = 0
         for s_node in self.node2hist:
-            if s_node < 0:
-                print(s_node,' <0')
             hist = self.node2hist[s_node]
-            # hist_node_id = [node_id for (node_id, timestamp) in hist]
+            # hist_node_int = [node_int for (node_int, timestamp) in hist]
             for t_idx in range(len(hist)):
-            # for t_node_id in hist_node_id:
-                # print('idx', idx)
+            # for t_node_int in hist_node_int:
                 self.idx2source_id[idx] = s_node
                 self.idx2target_id[idx] = t_idx
-                # self.idx2target_id[idx] = t_node_id
+                # self.idx2target_id[idx] = t_node_int
                 idx += 1
 
-        # print ('\tget edge rate...')
         self.get_edge_rate()
-
-        # print ('\tinit. neg_table...')
-        self.neg_table = np.zeros((self.neg_table_size,))
+        self.neg_table = ['0'] * self.neg_table_size # np.zeros((self.neg_table_size,))
         self.init_neg_table() ## Check this: Time-consuming
 
     def get_edge_rate(self):
@@ -246,76 +232,18 @@ class DataHelper(Dataset):
     def init_neg_table(self):
         tot_sum, cur_sum, por = 0., 0., 0.
         # for k in range(self.node_dim):
-        for node_ori_id in self.node_set:
-            tot_sum += np.power(self.degrees[node_ori_id], self.NEG_SAMPLING_POWER)
+        for node_id in self.node_set:
+            tot_sum += np.power(self.degrees[node_id], self.NEG_SAMPLING_POWER)
 
         n_id = 0
         for k in range(self.neg_table_size):
             if (k + 1.) / self.neg_table_size > por:
-                node_ori_id  = self.node_list[n_id] ## XXX ##
-                cur_sum += np.power(self.degrees[node_ori_id], self.NEG_SAMPLING_POWER)
+                node_id  = self.node_list[n_id] ## XXX ##
+                cur_sum += np.power(self.degrees[node_id], self.NEG_SAMPLING_POWER)
                 por = cur_sum / tot_sum
                 n_id += 1
             # self.neg_table[k] = n_id - 1
             self.neg_table[k] = self.node_list[n_id - 1]
-
-    def get_histories(self,node,remove_node,time):
-        lack_hist_num = self.hist_len
-        current_time_idx = self.time_stamp.index(time)
-        hist_nodes = []
-        hist_times = []
-        while lack_hist_num > 0 and current_time_idx >= 0:
-            current_nodes = copy.copy(self.node_time_nodes[node][self.time_stamp[current_time_idx]])  # !!! deep copy
-            if current_time_idx == self.time_stamp.index(time):  # remove target node at current time
-                current_nodes.remove(remove_node)
-            if current_nodes is None:
-                current_nodes = []
-            if len(current_nodes) + len(hist_nodes) >= self.hist_len:
-                hist_nodes += random.sample(current_nodes, lack_hist_num)
-                hist_times += [self.time_stamp[current_time_idx]] * lack_hist_num
-                break
-            else:
-                hist_nodes += current_nodes
-                hist_times += [self.time_stamp[current_time_idx]] * len(current_nodes)
-                lack_hist_num -= len(current_nodes)
-
-                current_time_idx -= 1
-                while not self.node_time_nodes[node].has_key(self.time_stamp[current_time_idx]):
-                    current_time_idx -= 1
-
-        np_his_nodes = np.zeros((self.hist_len,))
-        np_his_nodes[:len(hist_nodes)] = hist_nodes
-        np_his_times = np.zeros((self.hist_len,))
-        np_his_times[:len(hist_times)] = hist_times
-        np_his_masks = np.zeros((self.hist_len,))
-        np_his_masks[:len(hist_nodes)] = 1.
-
-        return np_his_nodes, np_his_times, np_his_masks
-
-    def get_histories_for_gat(self,node,remove_node,time):
-        current_time_idx = self.time_stamp.index(time)
-        hist_nodes = []
-        hist_times = []
-        while current_time_idx >= 0:
-            current_nodes = copy.copy(self.node_time_nodes[node][self.time_stamp[current_time_idx]])  # !!! deep copy
-            if current_time_idx == self.time_stamp.index(time):  # remove target node at current time
-                current_nodes.remove(remove_node)
-            if current_nodes is None:
-                current_nodes = []
-            hist_nodes += current_nodes
-            hist_times += [self.time_stamp[current_time_idx]] * len(current_nodes)
-            current_time_idx -= 1
-            while not self.node_time_nodes[node].has_key(self.time_stamp[current_time_idx]):
-                current_time_idx -= 1
-
-        np_his_nodes = np.zeros((self.max_nei_len,))
-        np_his_nodes[:len(hist_nodes)] = hist_nodes
-        np_his_times = np.zeros((self.max_nei_len,))
-        np_his_times[:len(hist_times)] = hist_times
-        np_his_masks = np.zeros((self.max_nei_len,))
-        np_his_masks[:len(hist_nodes)] = 1.
-
-        return np_his_nodes, np_his_times, np_his_masks
 
     def __len__(self):
         return self.data_size
@@ -323,8 +251,7 @@ class DataHelper(Dataset):
     def __getitem__(self, idx):
         # sampling via htne
         s_node = self.idx2source_id[idx]
-        if s_node < 0:
-            print(idx, s_node)
+
         hist = self.node2hist[s_node]
         t_idx = self.idx2target_id[idx]
         t_node = hist[t_idx][0]
@@ -342,14 +269,14 @@ class DataHelper(Dataset):
         else:
             t_his = t_his_list[s_idx - self.hist_len:s_idx]
 
-        s_his_nodes = np.zeros((self.hist_len,))
+        s_his_nodes = ['0']*self.hist_len #np.zeros((self.hist_len,))
         s_his_nodes[:len(s_his)] = [h[0] for h in s_his]
         s_his_times = np.zeros((self.hist_len,))
         s_his_times[:len(s_his)] = [h[1] for h in s_his]
         s_his_masks = np.zeros((self.hist_len,))
         s_his_masks[:len(s_his)] = 1.
 
-        t_his_nodes = np.zeros((self.hist_len,))
+        t_his_nodes = ['0']*self.hist_len #np.zeros((self.hist_len,))
         t_his_nodes[:len(t_his)] = [h[0] for h in t_his]
         t_his_times = np.zeros((self.hist_len,))
         t_his_times[:len(t_his)] = [h[1] for h in t_his]
@@ -394,7 +321,8 @@ class DataHelper(Dataset):
 
     def negative_sampling(self):
         rand_idx = np.random.randint(0, self.neg_table_size, (self.neg_size,))
-        sampled_nodes = self.neg_table[rand_idx]
+        # sampled_nodes = self.neg_table[rand_idx]
+        sampled_nodes = [self.neg_table[idx] for idx in rand_idx]
         # self.data_dict.update(sampled_nodes)
         # return self.data_dict
         return sampled_nodes
