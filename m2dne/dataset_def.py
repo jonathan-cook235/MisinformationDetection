@@ -52,8 +52,9 @@ class DataHelper(Dataset):
         self.time_edges_dict = {}
         self.time_nodes_dict = {}
 
-        self.user_tweet_dict = {'0':'0'}#user_id:tweet_id
-    
+        # self.user_tweet_dict = {'0':'0'}#str(user_id):str(tweet_id)
+        self.user_tweet_dict = {0: 0}  # user_id:tweet_id
+
         with open(file_path, 'rt') as infile:
 
             # node_int  = 0
@@ -193,7 +194,8 @@ class DataHelper(Dataset):
                 idx += 1
 
         self.get_edge_rate()
-        self.neg_table = ['0'] * self.neg_table_size # np.zeros((self.neg_table_size,))
+        # self.neg_table = ['0'] * self.neg_table_size
+        self.neg_table = np.zeros((self.neg_table_size,))
         self.init_neg_table() ## Check this: Time-consuming
 
     def get_edge_rate(self):
@@ -269,14 +271,16 @@ class DataHelper(Dataset):
         else:
             t_his = t_his_list[s_idx - self.hist_len:s_idx]
 
-        s_his_nodes = ['0']*self.hist_len #np.zeros((self.hist_len,))
+        # s_his_nodes = ['0'] * self.hist_len
+        s_his_nodes = np.zeros((self.hist_len,))
         s_his_nodes[:len(s_his)] = [h[0] for h in s_his]
         s_his_times = np.zeros((self.hist_len,))
         s_his_times[:len(s_his)] = [h[1] for h in s_his]
         s_his_masks = np.zeros((self.hist_len,))
         s_his_masks[:len(s_his)] = 1.
 
-        t_his_nodes = ['0']*self.hist_len #np.zeros((self.hist_len,))
+        # t_his_nodes = ['0'] * self.hist_len
+        t_his_nodes = np.zeros((self.hist_len,))
         t_his_nodes[:len(t_his)] = [h[0] for h in t_his]
         t_his_times = np.zeros((self.hist_len,))
         t_his_times[:len(t_his)] = [h[1] for h in t_his]
@@ -321,9 +325,7 @@ class DataHelper(Dataset):
 
     def negative_sampling(self):
         rand_idx = np.random.randint(0, self.neg_table_size, (self.neg_size,))
-        # sampled_nodes = self.neg_table[rand_idx]
-        sampled_nodes = [self.neg_table[idx] for idx in rand_idx]
-        # self.data_dict.update(sampled_nodes)
-        # return self.data_dict
+        sampled_nodes = self.neg_table[rand_idx]
+        # sampled_nodes = [self.neg_table[idx] for idx in rand_idx] # str
         return sampled_nodes
 

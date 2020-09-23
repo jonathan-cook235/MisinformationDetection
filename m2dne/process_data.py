@@ -39,8 +39,8 @@ def load_labels(dataset_dir):
     with open(os.path.join(dataset_dir, "label.txt")) as label_file:
         for line in label_file.readlines():
             label, news_id = line.split(":")
-            # labels[int(news_id)] = label
-            labels[str(int(news_id))] = label
+            labels[int(news_id)] = label
+            # labels[str(int(news_id))] = label
     return labels
 
 def get_user_and_tweet_ids_in_train(trees_to_parse, train_ids):
