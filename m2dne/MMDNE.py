@@ -154,10 +154,9 @@ class MMDNE(nn.Module):
         s_h_node_emb = self.get_emb_from_id(s_h_nodes,news_id, dim_num=3, dim_size=self.hist_len)
         # t_h_node_emb = self.get_emb_from_id(t_h_nodes,news_id, dim_num=3,dim_size=self.hist_len)
 
-        max_d_time = self.max_d_time_dict[news_id]
         delta_s = self.delta_s#.index_select(0, Variable(s_nodes.view(-1))).unsqueeze(1)  # (b,1)
         d_time_s = torch.abs(e_times.unsqueeze(1) - s_h_times)  # (batch, hist_len)
-        d_time_s = self.leakyrelu(d_time_s / max_d_time)
+        # d_time_s = self.leakyrelu(d_time_s / max_d_time)
         # delta_t = self.delta_t#.index_select(0, Variable(t_nodes.view(-1))).unsqueeze(1)  # TODO: delta_t ???
         # d_time_t = torch.abs(e_times.unsqueeze(1) - t_h_times)  # (batch, hist_len)
         # d_time_t = self.leakyrelu(d_time_t / max_d_time)
@@ -280,8 +279,8 @@ class MMDNE(nn.Module):
     def global_loss(self,s_nodes, t_nodes, e_times, delta_e_true, delta_n_true, node_sum, edge_last_time_sum,news_id):
         delta_e_pred = self.global_forward(s_nodes, t_nodes, e_times, delta_n_true, node_sum, edge_last_time_sum,news_id)
         criterion = torch.nn.MSELoss()
-        # loss = criterion(torch.log(delta_e_pred + 1e-5), torch.log(Variable(delta_e_true) + 1e-5))
-        loss = ((delta_e_pred - Variable(delta_e_true))**2).mean(dim=-1)
+        loss = criterion(torch.log(delta_e_pred + 1e-5), torch.log(Variable(delta_e_true) + 1e-5))
+        # loss = ((delta_e_pred - Variable(delta_e_true))**2).mean(dim=-1)
         return loss
 
     def veracity_predict(self, news_id):
@@ -319,6 +318,13 @@ class MMDNE(nn.Module):
                news_id):
 
         self.opt.zero_grad()
+
+        ## XXX ##
+        max_d_time = self.max_d_time_dict[news_id]
+        e_times = e_times/max_d_time
+        s_h_times = s_h_times/max_d_time
+        t_h_times = t_h_times/max_d_time
+
         local_loss = self.local_loss(s_nodes, t_nodes, e_times,
                                      s_h_nodes, s_h_times, s_h_time_mask,
                                      t_h_nodes, t_h_times, t_h_time_mask,
