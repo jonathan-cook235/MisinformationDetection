@@ -30,8 +30,8 @@ DID = 0
 
 
 class MMDNE(nn.Module):
-    def __init__(self, file_path, save_graph_path,
-                 save_embedding_path, emb_size=32, gat_hidden_size=32, neg_size=10, hist_len=2, directed=False,
+    def __init__(self, file_path, save_graph_path,model_name,save_model_path,
+                 emb_size=32, neg_size=10, hist_len=2, directed=False,
                  learning_rate=0.01, batch_size=1000, save_step=10, epoch_num=1, optim='SGD',
                  tlp_flag=False, trend_prediction=False, only_binary=True,seed=64,
                  epsilon=1.0, epsilon1=1.0,epsilon2=1.0, dropout=0.1
@@ -47,7 +47,8 @@ class MMDNE(nn.Module):
         self.epochs = epoch_num
         self.batch_size = batch_size
         self.save_step = save_step
-        self.save_embedding_path = save_embedding_path
+        self.model_name = model_name
+        self.save_model_path = save_model_path
 
         self.seed = seed
         self.dropout = dropout
@@ -250,13 +251,19 @@ class MMDNE(nn.Module):
         return p_lambda, n_lambda_s#, n_lambda_t  # max p_lambda, min n_lambda
 
     def global_forward(self, s_nodes, t_nodes, e_times, delta_n_true, node_sum, edge_last_time_sum,news_id):
-        s_node_emb = self.get_emb_from_id(s_nodes,news_id,dim_num=2)
-        t_node_emb = self.get_emb_from_id(t_nodes,news_id,dim_num=2)
+        s_node_emb = self.leakyrelu(self.get_emb_from_id(s_nodes,news_id,dim_num=2))
+        t_node_emb = self.leakyrelu(self.get_emb_from_id(t_nodes,news_id,dim_num=2))
 
-        beta = torch.sigmoid(self.bilinear(s_node_emb, t_node_emb)).squeeze(-1) # (batch) Equation-11
+        beta = torch.sigmoid(self.bilinear(s_node_emb, t_node_emb)).squeeze(-1) # (batch) Equation-11 torch.sigmoid
         delta_e_pred = beta / torch.pow(Variable(e_times)+1e-5, self.theta) * Variable(node_sum) * \
                        (self.zeta * torch.pow(Variable(node_sum-1), self.gamma)) # Equation-10
 
+        if torch.isnan(delta_e_pred).any():
+            print('beta',beta,'e_times',e_times,'self.theta',self.theta,
+                  'torch.pow(Variable(e_times)+1e-5, self.theta)',torch.pow(Variable(e_times)+1e-5, self.theta),
+                  'self.zeta',self.zeta, 'self.gamma',self.gamma,
+                  'torch.pow(Variable(node_sum-1), self.gamma)', torch.pow(Variable(node_sum-1), self.gamma)
+                  )
         return delta_e_pred
 
     def local_loss(self, s_nodes, t_nodes, e_times,
@@ -279,8 +286,14 @@ class MMDNE(nn.Module):
     def global_loss(self,s_nodes, t_nodes, e_times, delta_e_true, delta_n_true, node_sum, edge_last_time_sum,news_id):
         delta_e_pred = self.global_forward(s_nodes, t_nodes, e_times, delta_n_true, node_sum, edge_last_time_sum,news_id)
         criterion = torch.nn.MSELoss()
-        # loss = criterion(torch.log(delta_e_pred + 1e-5), torch.log(Variable(delta_e_true) + 1e-5))
-        loss = ((delta_e_pred - Variable(delta_e_true))**2).mean(dim=-1)
+
+        loss = criterion(torch.log(delta_e_pred + 1e-5), torch.log(Variable(delta_e_true) + 1e-5))
+        # loss = ((delta_e_pred - Variable(delta_e_true))**2).mean(dim=-1)
+        # if torch.isnan(loss):
+        #     print('delta_e_pred',delta_e_pred, 'delta_e_true',delta_e_true,
+        #           'torch.log(delta_e_pred + 1e-5)',torch.log(delta_e_pred + 1e-5),
+        #           'torch.log(Variable(delta_e_true) + 1e-5)',torch.log(Variable(delta_e_true) + 1e-5),
+        #           'loss',loss)
         return loss
 
     def veracity_predict(self, news_id):
@@ -338,10 +351,7 @@ class MMDNE(nn.Module):
         weighted_global_loss = self.epsilon2 * global_loss.sum()
         weighted_vera_loss = self.epsilon * vera_loss
 
-        loss = weighted_local_loss + weighted_vera_loss + weighted_global_loss
-
-        loss.backward()
-        self.opt.step()
+        loss = weighted_local_loss + weighted_global_loss # + weighted_vera_loss
 
         return loss, weighted_local_loss, weighted_global_loss, weighted_vera_loss
 
@@ -365,39 +375,6 @@ class MMDNE(nn.Module):
                 total_batch_global_loss = 0
                 total_batch_vera_loss = 0
                 for _, sample_batched in enumerate(loader):
-                    # i_batch += 1
-                    # if i_batch % 1000 == 0 and i_batch != 0:
-                    #     sys.stdout.write('\r\n' + str(i_batch * self.batch_size)
-                    #                      + '\tloss: ' + str(self.loss.cpu().numpy() / (self.batch_size * i_batch))
-                    #                      + '\tmicro_loss: ' + str(self.micro_loss.cpu().numpy() / (self.batch_size * i_batch))
-                    #                      + '\tmacro_loss: ' + str(self.macro_loss.cpu().numpy() / (self.batch_size * i_batch))
-                    #                      + '\r\ndelta_s:' + str(self.delta_s.mean().cpu().data.numpy())
-                    #                      + '\tdelta_t:' + str(self.delta_t.mean().cpu().data.numpy())
-                    #                      + '\tglobal_attention:' + str(self.global_attention.mean(dim=0).cpu().data.numpy())
-                    #                      + '\r\nzeta:' + str(self.zeta.mean().cpu().data.numpy())
-                    #                      + '\tgamma:' + str(self.gamma.mean().cpu().data.numpy())
-                    #                      + '\ttheta:' + str(self.theta.mean().cpu().data.numpy())
-                    #     )
-                    #     sys.stdout.flush()
-
-                    # batch_loss, batch_local_loss, batch_global_loss, batch_vera_loss = \
-                    #     self.update(sample_batched['source_node'].type(LType),
-                    #                 sample_batched['target_node'].type(LType),
-                    #                 sample_batched['event_time'].type(FType),
-                    #                 sample_batched['s_history_nodes'].type(LType),
-                    #                 sample_batched['s_history_times'].type(FType),
-                    #                 sample_batched['s_history_masks'].type(FType),
-                    #                 sample_batched['t_history_nodes'].type(LType),
-                    #                 sample_batched['t_history_times'].type(FType),
-                    #                 sample_batched['t_history_masks'].type(FType),
-                    #                 sample_batched['neg_s_nodes'].type(LType),
-                    #                 sample_batched['neg_t_nodes'].type(LType),
-                    #                 sample_batched['delta_e_true'].type(FType),
-                    #                 sample_batched['delta_n_true'].type(FType),
-                    #                 sample_batched['node_sum'].type(FType),
-                    #                 sample_batched['edge_last_time_sum'].type(FType),
-                    #                 news_id
-                    #                 )
 
                     #str
                     batch_loss, batch_local_loss, batch_global_loss, batch_vera_loss = \
@@ -418,6 +395,8 @@ class MMDNE(nn.Module):
                                     sample_batched['edge_last_time_sum'].type(FType),
                                     news_id
                                     )
+                    batch_loss.backward()
+                    self.opt.step()
 
                     total_batch_loss += batch_loss.detach().numpy()
                     total_batch_local_loss += batch_local_loss.detach().numpy()
@@ -425,27 +404,51 @@ class MMDNE(nn.Module):
                     total_batch_vera_loss += batch_vera_loss.detach().numpy()
 
                 if num %10 == 0:
-                    sys.stdout.write('\r\nepoch-' + str(epoch) +  ' num-' + str(num) + ' news_id-' + str(news_id) +
-                                     ': avg loss = ' + str(total_batch_loss / len(graph_data)) +
-                                     ', avg local loss = ' + str(total_batch_local_loss / len(graph_data)) +
-                                     ', avg global loss = ' + str(total_batch_global_loss / len(graph_data)) +
-                                     ', avg veracity loss = ' + str(total_batch_vera_loss / len(graph_data)) +
-                                     '\n')
-                    sys.stdout.flush()
+                    print('epoch-{} num-{} news_id-{} : '
+                          'avg loss = {:.3f}, '
+                          'avg local loss = {:.3f}, '
+                          'avg global loss = {:.3f}, '
+                          'avg veracity loss = {:.3f}\n'.format(epoch, num, news_id,
+                                                 total_batch_loss / len(graph_data),
+                                                 total_batch_local_loss / len(graph_data),
+                                                 total_batch_global_loss / len(graph_data),
+                                                 total_batch_vera_loss / len(graph_data)))
 
             if epoch % 1 == 0:# and epoch != 0:
                 self.eval()
 
-                train_acc, train_correct, train_n_samples = self.eval_func(self.train_ids)
-                print('--train accuracy: {:.4f}, correct {} out of {}'.format(train_acc, train_correct, train_n_samples))
+                ## Evaluate the temporal predictions
+                val_loss, val_local_loss, val_global_loss, val_vera_loss, val_num_datapoints =\
+                    self.eval_temporal_pred(self.val_ids)
+                print('\tValdation: avg loss = {:.3f}, '
+                      'avg local loss = {:.3f}, '
+                      'avg global loss = {:.3f}, '
+                      'avg veracity loss = {:.3f}\n'.format(val_loss / val_num_datapoints,
+                                                            val_local_loss / val_num_datapoints,
+                                                            val_global_loss / val_num_datapoints,
+                                                            val_vera_loss / val_num_datapoints))
 
-                val_acc, val_correct, val_n_samples = self.eval_func(self.val_ids)
-                print('--validation accuracy: {:.4f}, correct {} out of {}'.format(val_acc, val_correct, val_n_samples))
+                test_loss, test_local_loss, test_global_loss, test_vera_loss, test_num_datapoints = \
+                    self.eval_temporal_pred(self.test_ids)
+                print('\tTest: avg loss = {:.3f}, '
+                      'avg local loss = {:.3f}, '
+                      'avg global loss = {:.3f}, '
+                      'avg veracity loss = {:.3f}\n'.format(test_loss / test_num_datapoints,
+                                                            test_local_loss / test_num_datapoints,
+                                                            test_global_loss / test_num_datapoints,
+                                                            test_vera_loss / test_num_datapoints))
 
-                test_acc, test_correct, test_n_samples = self.eval_func(self.test_ids)
-                print('--test accuracy: {:.4f}, correct {} out of {}'.format(test_acc, test_correct, test_n_samples))
+                ## Evaluate veracity classification
+                # train_acc, train_correct, train_n_samples = self.eval_veracity_func(self.train_ids)
+                # print('--train accuracy: {:.3f}, correct {} out of {}'.format(train_acc, train_correct, train_n_samples))
+                #
+                # val_acc, val_correct, val_n_samples = self.eval_veracity_func(self.val_ids)
+                # print('--validation accuracy: {:.3f}, correct {} out of {}'.format(val_acc, val_correct, val_n_samples))
+                #
+                # test_acc, test_correct, test_n_samples = self.eval_veracity_func(self.test_ids)
+                # print('--test accuracy: {:.3f}, correct {} out of {}'.format(test_acc, test_correct, test_n_samples))
 
-    def eval_func(self, news_id_consider):
+    def eval_veracity_func(self, news_id_consider):
 
         correct = 0
         n_samples = len(news_id_consider)
@@ -487,36 +490,82 @@ class MMDNE(nn.Module):
 
         return  acc, correct, n_samples
 
+    def eval_temporal_pred(self, news_id_consider):
+        news_id_list = list(self.graph_data_dict.keys())
+
+        total_loss = 0
+        total_local_loss = 0
+        total_global_loss = 0
+        total_vera_loss = 0
+        total_num_datapoints = 0
+        
+        with torch.no_grad():
+            for _, news_id in enumerate(news_id_list):
+                if news_id not in news_id_consider:
+                    continue
+
+                graph_data = self.graph_data_dict[news_id]
+                total_num_datapoints += len(graph_data)
+                
+                loader = DataLoader(graph_data, batch_size=1000, shuffle=True, num_workers=10)
+                for _, sample_batched in enumerate(loader):
+                    # str
+                    batch_loss, batch_local_loss, batch_global_loss, batch_vera_loss = \
+                        self.update(sample_batched['source_node'],
+                                    sample_batched['target_node'],
+                                    sample_batched['event_time'].type(FType),
+                                    sample_batched['s_history_nodes'],
+                                    sample_batched['s_history_times'].type(FType),
+                                    sample_batched['s_history_masks'].type(FType),
+                                    sample_batched['t_history_nodes'],
+                                    sample_batched['t_history_times'].type(FType),
+                                    sample_batched['t_history_masks'].type(FType),
+                                    sample_batched['neg_s_nodes'],
+                                    sample_batched['neg_t_nodes'],
+                                    sample_batched['delta_e_true'].type(FType),
+                                    sample_batched['delta_n_true'].type(FType),
+                                    sample_batched['node_sum'].type(FType),
+                                    sample_batched['edge_last_time_sum'].type(FType),
+                                    news_id
+                                    )
+
+                    total_loss += batch_loss.detach().numpy()
+                    total_local_loss += batch_local_loss.detach().numpy()
+                    total_global_loss += batch_global_loss.detach().numpy()
+                    total_vera_loss += batch_vera_loss.detach().numpy()
+            
+        return total_loss, total_local_loss, total_global_loss, total_vera_loss, total_num_datapoints
+
     # def save_node_embeddings(self, path):
-    #     if torch.cuda.is_available():
-    #         embeddings = self.node_emb.cpu().data.numpy()
-    #     else:
-    #         embeddings = self.node_emb.data.numpy()
-    #     ## XXX ##
-    #     # for count in self.node_dim:
-    #     #     writer = open(path, 'w')
-    #     #     writer.write('%d %d\n' % (self.node_dim[count], self.emb_size))
-    #     #     for n_idx in range(self.node_dim[count]):
-    #     #         writer.write(' '.join(str(d) for d in embeddings[n_idx]) + '\n')
-    #     #     writer.close()
-    #     #     return embeddings
-    #
-    #     writer = open(path, 'w')
-    #     writer.write('%d %d\n' % (self.node_dim, self.emb_size))
-    #     for n_idx in range(self.node_dim):
-    #         writer.write(' '.join(str(d) for d in embeddings[n_idx]) + '\n')
-    #     writer.close()
+        #     if torch.cuda.is_available():
+        #         embeddings = self.node_emb.cpu().data.numpy()
+        #     else:
+        #         embeddings = self.node_emb.data.numpy()
+        #     ## XXX ##
+        #     # for count in self.node_dim:
+        #     #     writer = open(path, 'w')
+        #     #     writer.write('%d %d\n' % (self.node_dim[count], self.emb_size))
+        #     #     for n_idx in range(self.node_dim[count]):
+        #     #         writer.write(' '.join(str(d) for d in embeddings[n_idx]) + '\n')
+        #     #     writer.close()
+        #     #     return embeddings
+        #
+        #     writer = open(path, 'w')
+        #     writer.write('%d %d\n' % (self.node_dim, self.emb_size))
+        #     for n_idx in range(self.node_dim):
+        #         writer.write(' '.join(str(d) for d in embeddings[n_idx]) + '\n')
+        #     writer.close()
 
 
 if __name__ == '__main__':
+    train_mode =  True
     print(time.asctime(time.localtime(time.time())))
     parameters_dict = {
         'file_path': '../rumor_detection_acl2017/twitter15/',
         'save_graph_path':'../rumor_detection_acl2017/twitter15/graph_obj/',
-        # 'cl_label_data': 'data/twitter15/label.txt',
-        # 'nr_data': 'data/twitter15/twitter15_network_reconstruction_0.01edge.txt',
-        'save_embedding_path': '../checkpoints/twitter15/',
-        'epoch_num': 1000,
+        'model_name': 'MMDNE_twitter15',
+        'save_model_path': '../checkpoints/twitter15/',
+        'epoch_num': 10,#1000
         'batch_size': 32,
         'emb_size': 64,
         # 'gat_hidden_size':32,
@@ -535,15 +584,13 @@ if __name__ == '__main__':
 
     if not os.path.exists(parameters_dict['save_graph_path']):
         os.mkdir(parameters_dict['save_graph_path'])
-    if not os.path.exists(parameters_dict['save_embedding_path']):
-        os.mkdir(parameters_dict['save_embedding_path'])
+    if not os.path.exists(parameters_dict['save_model_path']):
+        os.mkdir(parameters_dict['save_model_path'])
 
     mmdne = MMDNE(file_path=parameters_dict['file_path'],
                   save_graph_path = parameters_dict['save_graph_path'],
-                  # graph_dict=graph_dict,
-                  # cl_label_data=parameters_dict['cl_label_data'],
-                  # nr_data=parameters_dict['nr_data'],
-                  save_embedding_path=parameters_dict['save_embedding_path'],
+                  model_name=parameters_dict['model_name'],
+                  save_model_path=parameters_dict['save_model_path'],
                   save_step=parameters_dict['save_step'],
                   directed=parameters_dict['directed'],
                   epoch_num=parameters_dict['epoch_num'],
@@ -559,9 +606,47 @@ if __name__ == '__main__':
                   epsilon1=parameters_dict['epsilon1'],
                   epsilon2=parameters_dict['epsilon2'],
                   epsilon=parameters_dict['epsilon'])
-    with autograd.detect_anomaly():
+    print('parameters: \r\n{}'.format(parameters_dict))
+
+    if train_mode:
+    # with autograd.detect_anomaly():
         mmdne.train_func()
 
-    print ('parameters: \r\n{}'.format(parameters_dict))
+        state_dict = mmdne.state_dict()
+        torch.save(state_dict, os.path.join(mmdne.save_model_path, mmdne.model_name))
+    else:
+        try:
+            output_model_file = os.path.join(mmdne.save_model_path, mmdne.model_name)
+            state_dict = torch.load(output_model_file)
+            mmdne.load_state_dict(state_dict)
+            # print("Successfully load: " + str(output_model_file))
+
+            mmdne.eval()
+            ## Evaluate the temporal predictions
+            val_loss, val_local_loss, val_global_loss, val_vera_loss, val_num_datapoints = \
+                mmdne.eval_temporal_pred(mmdne.val_ids)
+            print('\tValdation: avg loss = {:.3f}, '
+                  'avg local loss = {:.3f}, '
+                  'avg global loss = {:.3f}, '
+                  'avg veracity loss = {:.3f}\n'.format(val_loss / val_num_datapoints,
+                                                        val_local_loss / val_num_datapoints,
+                                                        val_global_loss / val_num_datapoints,
+                                                        val_vera_loss / val_num_datapoints))
+
+            test_loss, test_local_loss, test_global_loss, test_vera_loss, test_num_datapoints = \
+                mmdne.eval_temporal_pred(mmdne.test_ids)
+            print('\tTest: avg loss = {:.3f}, '
+                  'avg local loss = {:.3f}, '
+                  'avg global loss = {:.3f}, '
+                  'avg veracity loss = {:.3f}\n'.format(test_loss / test_num_datapoints,
+                                                        test_local_loss / test_num_datapoints,
+                                                        test_global_loss / test_num_datapoints,
+                                                        test_vera_loss / test_num_datapoints))
+
+        except:
+            print('Cannot find: ' + str(output_model_file))
+            # return None
+
+
 
 

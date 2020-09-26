@@ -98,16 +98,6 @@ class DataHelper(Dataset):
                 # assert d_time >= 0
                 d_time = time_out
 
-                # if user_in not in list_of_nodes:## XXX ##
-                #     user_tweet_dict.update({user_in : node_int})# node_int is actually an ID number starting from 1
-                #     list_of_nodes.append(user_in)
-                #     node_int += 1
-                #
-                # if user_out not in list_of_nodes:
-                #     user_tweet_dict.update({user_out : node_int})
-                #     list_of_nodes.append(user_out)
-                #     node_int += 1
-                #
                 # s_node = user_tweet_dict[user_in] ## node_index --> node_int ##
                 # t_node = user_tweet_dict[user_out] ## node_index --> node_int  ##
 

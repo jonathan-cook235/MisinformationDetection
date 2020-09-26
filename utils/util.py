@@ -112,3 +112,27 @@ def cap_sequences(sequential_dataset, cap_len):
     sequential_dataset = [elt for elt in sequential_dataset if len(elt[0].shape) > 1]
     sequential_dataset = [[elt[0][:cap_len, :], elt[1]] for elt in sequential_dataset if elt[0].size(0) >= cap_len]
     return sequential_dataset
+
+def save_checkpoint(state, process_id, MODEL_OR_OPTIM):
+    """
+    Save the training model
+    """
+    if MODEL_OR_OPTIM == 'MODEL':
+        filename = str(args.renhd_model) + "_process_" + str(process_id) + \
+                   "_permutation_" + str(args.permutation) + ".th"
+    elif MODEL_OR_OPTIM == 'OPTIM':
+        filename = str(args.renhd_model) + "_optimizer_" + str(process_id) + \
+                   "_permutation_" + str(args.permutation) + ".th"
+    else:
+        filename = ''
+        print('Wrong MODEL_OR_OPTIM')
+    # print("Successfully save the "+str(filename))
+
+
+def load_checkpoint(file_name):
+    """
+    load the trained model
+     """
+
+
+    # if os.path.exists(output_model_file):
