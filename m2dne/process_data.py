@@ -340,7 +340,7 @@ def create_dataset(directed, file_path, hist_len, neg_size, save_graph_path,
     news_ids_to_consider = list(labels.keys())
     if only_binary:
         news_ids_to_consider = [news_id for news_id in news_ids_to_consider
-                                if labels[news_id] in ['false', 'true']]
+                                if labels[news_id] == 'false']
 
     train_ids, val_ids = train_test_split(news_ids_to_consider, test_size=0.1,random_state=seed)
     train_ids, test_ids = train_test_split(train_ids, test_size=0.25, random_state=seed * 7)
