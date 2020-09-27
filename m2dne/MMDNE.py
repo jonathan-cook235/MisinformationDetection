@@ -255,8 +255,9 @@ class MMDNE(nn.Module):
         t_node_emb = self.get_emb_from_id(t_nodes,news_id,dim_num=2)
 
         beta = torch.sigmoid(self.bilinear(s_node_emb, t_node_emb)).squeeze(-1) # (batch) Equation-11 torch.sigmoid
-        delta_e_pred = beta / torch.pow(Variable(e_times)+1e-5, self.theta) * Variable(node_sum) * \
-                       (self.zeta * torch.pow(Variable(node_sum-1), self.gamma)) # Equation-10
+        # delta_e_pred cannot be  negative
+        delta_e_pred = torch.relu(beta / torch.pow(Variable(e_times)+1e-5, self.theta) * Variable(node_sum) * \
+                       (self.zeta * torch.pow(Variable(node_sum-1), self.gamma))) # Equation-10
 
         if torch.isnan(delta_e_pred).any():
             print('beta',beta,'e_times',e_times,'self.theta',self.theta,
@@ -353,7 +354,7 @@ class MMDNE(nn.Module):
         weighted_global_loss = self.epsilon2 * global_loss.sum()
         weighted_vera_loss = self.epsilon * vera_loss
 
-        loss = weighted_local_loss + weighted_global_loss # + weighted_vera_loss
+        loss = weighted_local_loss + weighted_global_loss + weighted_vera_loss
 
         return loss, weighted_local_loss, weighted_global_loss, weighted_vera_loss
 
@@ -440,15 +441,15 @@ class MMDNE(nn.Module):
                                                             test_global_loss / test_num_datapoints,
                                                             test_vera_loss / test_num_datapoints))
 
-                ## Evaluate veracity classification
-                # train_acc, train_correct, train_n_samples = self.eval_veracity_func(self.train_ids)
-                # print('--train accuracy: {:.3f}, correct {} out of {}'.format(train_acc, train_correct, train_n_samples))
-                #
-                # val_acc, val_correct, val_n_samples = self.eval_veracity_func(self.val_ids)
-                # print('--validation accuracy: {:.3f}, correct {} out of {}'.format(val_acc, val_correct, val_n_samples))
-                #
-                # test_acc, test_correct, test_n_samples = self.eval_veracity_func(self.test_ids)
-                # print('--test accuracy: {:.3f}, correct {} out of {}'.format(test_acc, test_correct, test_n_samples))
+                # Evaluate veracity classification
+                train_acc, train_correct, train_n_samples = self.eval_veracity_func(self.train_ids)
+                print('--train accuracy: {:.3f}, correct {} out of {}'.format(train_acc, train_correct, train_n_samples))
+
+                val_acc, val_correct, val_n_samples = self.eval_veracity_func(self.val_ids)
+                print('--validation accuracy: {:.3f}, correct {} out of {}'.format(val_acc, val_correct, val_n_samples))
+
+                test_acc, test_correct, test_n_samples = self.eval_veracity_func(self.test_ids)
+                print('--test accuracy: {:.3f}, correct {} out of {}'.format(test_acc, test_correct, test_n_samples))
 
     def eval_veracity_func(self, news_id_consider):
 
