@@ -251,8 +251,8 @@ class MMDNE(nn.Module):
         return p_lambda, n_lambda_s#, n_lambda_t  # max p_lambda, min n_lambda
 
     def global_forward(self, s_nodes, t_nodes, e_times, delta_n_true, node_sum, edge_last_time_sum,news_id):
-        s_node_emb = self.leakyrelu(self.get_emb_from_id(s_nodes,news_id,dim_num=2))
-        t_node_emb = self.leakyrelu(self.get_emb_from_id(t_nodes,news_id,dim_num=2))
+        s_node_emb = self.get_emb_from_id(s_nodes,news_id,dim_num=2)
+        t_node_emb = self.get_emb_from_id(t_nodes,news_id,dim_num=2)
 
         beta = torch.sigmoid(self.bilinear(s_node_emb, t_node_emb)).squeeze(-1) # (batch) Equation-11 torch.sigmoid
         delta_e_pred = beta / torch.pow(Variable(e_times)+1e-5, self.theta) * Variable(node_sum) * \
@@ -264,6 +264,7 @@ class MMDNE(nn.Module):
                   'self.zeta',self.zeta, 'self.gamma',self.gamma,
                   'torch.pow(Variable(node_sum-1), self.gamma)', torch.pow(Variable(node_sum-1), self.gamma)
                   )
+            assert(not torch.isnan(delta_e_pred).any())
         return delta_e_pred
 
     def local_loss(self, s_nodes, t_nodes, e_times,
@@ -289,11 +290,12 @@ class MMDNE(nn.Module):
 
         loss = criterion(torch.log(delta_e_pred + 1e-5), torch.log(Variable(delta_e_true) + 1e-5))
         # loss = ((delta_e_pred - Variable(delta_e_true))**2).mean(dim=-1)
-        # if torch.isnan(loss):
-        #     print('delta_e_pred',delta_e_pred, 'delta_e_true',delta_e_true,
-        #           'torch.log(delta_e_pred + 1e-5)',torch.log(delta_e_pred + 1e-5),
-        #           'torch.log(Variable(delta_e_true) + 1e-5)',torch.log(Variable(delta_e_true) + 1e-5),
-        #           'loss',loss)
+        if torch.isnan(loss):
+            print('delta_e_pred',delta_e_pred, 'delta_e_true',delta_e_true,
+                  'torch.log(delta_e_pred + 1e-5)',torch.log(delta_e_pred + 1e-5),
+                  'torch.log(Variable(delta_e_true) + 1e-5)',torch.log(Variable(delta_e_true) + 1e-5),
+                  'loss',loss)
+            assert (not torch.isnan(loss))
         return loss
 
     def veracity_predict(self, news_id):
