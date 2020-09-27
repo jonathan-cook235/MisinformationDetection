@@ -568,11 +568,11 @@ if __name__ == '__main__':
         'save_graph_path':'../rumor_detection_acl2017/twitter15/graph_obj/',
         'model_name': 'MMDNE_twitter15',
         'save_model_path': '../checkpoints/twitter15/',
-        'epoch_num': 10,#1000
+        'epoch_num': 100,#1000
         'batch_size': 32,
         'emb_size': 64,
         # 'gat_hidden_size':32,
-        'learning_rate': 1e-4,
+        'learning_rate': 1e-6,
         'neg_size': 5,
         'hist_len': 3,
         'directed': False,
