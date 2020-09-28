@@ -573,7 +573,7 @@ if __name__ == '__main__':
         'batch_size': 32,
         'emb_size': 64,
         # 'gat_hidden_size':32,
-        'learning_rate': 1e-6,
+        'learning_rate': 1e-4,
         'neg_size': 5,
         'hist_len': 3,
         'directed': False,
