@@ -346,15 +346,16 @@ class MMDNE(nn.Module):
                                      t_h_nodes, t_h_times, t_h_time_mask,
                                      neg_s_node, neg_t_node,news_id)
 
-        global_loss = self.global_loss(s_nodes, t_nodes, e_times,
-                                       delta_e_true, delta_n_true, node_sum, edge_last_time_sum,news_id)
+        #global_loss = self.global_loss(s_nodes, t_nodes, e_times,
+        #                               delta_e_true, delta_n_true, node_sum, edge_last_time_sum,news_id)
         vera_loss = self.veracity_loss(news_id)
 
         weighted_local_loss = self.epsilon1 * local_loss.sum()
-        weighted_global_loss = self.epsilon2 * global_loss.sum()
+        weighted_global_loss = weighted_local_loss
+        #weighted_global_loss = self.epsilon2 * global_loss.sum()
         weighted_vera_loss = self.epsilon * vera_loss
 
-        loss = weighted_local_loss + weighted_global_loss + weighted_vera_loss
+        loss = weighted_local_loss + weighted_vera_loss #+ weighted_global_loss
 
         return loss, weighted_local_loss, weighted_global_loss, weighted_vera_loss
 
