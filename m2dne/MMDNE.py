@@ -27,7 +27,61 @@ import random
 FType = torch.FloatTensor
 LType = torch.LongTensor
 
-DID = 0
+
+parser = argparse.ArgumentParser(description='Train the TPP network.')
+parser.add_argument('--dataset', choices=["twitter15", "twitter16"],
+                    help='Training dataset', default="twitter15")
+parser.add_argument('--optimizer', choices=["Adam", "SGD"],
+                    help='optimizer', default="Adam")
+parser.add_argument('--learning_rate', default=1e-4, type=float,
+                    help='learning rate')
+parser.add_argument('--epoch_num', default=100, type=int,
+                    help='Number of epochs')
+parser.add_argument('--oversampling_ratio', default=1, type=int,
+                    help='Oversampling ratio for data augmentation')
+# parser.add_argument('--dropout', default=0.0, type=float,
+#                 help='dropout for TGS_stack')
+parser.add_argument('--batch_size', default=32, type=int,
+                    help='Batch_size')
+parser.add_argument('--emb_size', default=64, type=int,
+                    help='embedding_size')
+parser.add_argument('--only_binary', action='store_true',
+                    help='Reduces the problem to binary classification')
+parser.add_argument('--neg_size', default=5, type=int,
+                    help='negative sample number')
+parser.add_argument('--hist_len', default=3, type=int,
+                    help='history node number')
+parser.add_argument('--standardize', action='store_true',
+                    help='Standardize features')
+parser.add_argument('--features', choices=["all", "text_only", "user_only"],
+                    help='Features to consider', default="all")
+parser.add_argument('--time_cutoff',
+                    help='Time cutoff in mins', default="None")
+parser.add_argument('--seed', default=64, type=int,
+                    help='Seed for train/val/test split')
+parser.add_argument('--patience', type=int, default=5, help='Patience for early stopping')
+parser.add_argument('--dropout', type=float, default=0.1, help='Dropout probability')
+parser.add_argument('--epsilon', type=float, default=10, help='veracity loss co-efficient')
+parser.add_argument('--epsilon1', type=float, default=1, help='local loss co-efficient')
+parser.add_argument('--epsilon2', type=float, default=1, help='global loss co-efficient')
+parser.add_argument('--gpu', type=int, default=1, help='Idx for the gpu to use')
+parser.add_argument('--backprop_every', type=int, default=10, help='Every how many batches to '
+                                                                  'backprop')
+args = parser.parse_args()
+print(args)
+
+device_string = 'cuda:{}'.format(args.gpu) if torch.cuda.is_available() else 'cpu'
+device = torch.device(device_string)
+
+model_name = 'MMDNE_'+ args.dataset
+data_file_path = '../rumor_detection_acl2017/' + args.dataset
+save_graph_path = data_file_path + '/graph_obj'
+save_model_path = '../checkpoints/' + args.dataset
+
+if not os.path.exists(save_graph_path):
+    os.mkdir(save_graph_path)
+if not os.path.exists(save_model_path):
+    os.mkdir(save_model_path)
 
 
 class MMDNE(nn.Module):
@@ -77,12 +131,12 @@ class MMDNE(nn.Module):
         ## initialize model trainable parameters
         if torch.cuda.is_available():
         # ??? single delta value for all nodes
-            self.delta_s = Variable((torch.ones(1)).type(FType).cuda(), requires_grad=True)
-            self.delta_t = Variable((torch.ones(1)).type(FType).cuda(), requires_grad=True)
+            self.delta_s = Variable((torch.ones(1)).type(FType).cuda(args.gpu), requires_grad=True)
+            self.delta_t = Variable((torch.ones(1)).type(FType).cuda(args.gpu), requires_grad=True)
 
-            self.zeta = Variable((torch.ones(1)).type(FType).cuda(), requires_grad=True)
-            self.gamma = Variable((torch.ones(1)).type(FType).cuda(), requires_grad=True)
-            self.theta = Variable((torch.ones(1)).type(FType).cuda(), requires_grad=True)
+            self.zeta = Variable((torch.ones(1)).type(FType).cuda(args.gpu), requires_grad=True)
+            self.gamma = Variable((torch.ones(1)).type(FType).cuda(args.gpu), requires_grad=True)
+            self.theta = Variable((torch.ones(1)).type(FType).cuda(args.gpu), requires_grad=True)
         else:
             self.delta_s = Variable((torch.ones(1)).type(FType), requires_grad=True)
             self.delta_t = Variable((torch.ones(1)).type(FType), requires_grad=True)
@@ -143,7 +197,7 @@ class MMDNE(nn.Module):
                 tweet_fts=tweet_fts.view(batch_size, dim_size, -1)
 
         # node_fts = user_fts
-        node_fts = torch.cat([user_fts, tweet_fts], dim=-1).to(device)
+        node_fts = torch.cat([user_fts, tweet_fts], dim=-1).to(self.device)
         node_emb = self.fts2emb(node_fts)  # (bach, emb_dim)
         return node_emb
 
@@ -561,82 +615,28 @@ def eval_temporal_pred(mmdne, news_id_consider):
 if __name__ == '__main__':
     train_mode =  True
     print(time.asctime(time.localtime(time.time())))
-    parameters_dict = {
-        'file_path': '../rumor_detection_acl2017/twitter15/',
-        'save_graph_path':'../rumor_detection_acl2017/twitter15/graph_obj/',
-        'model_name': 'MMDNE_twitter15',
-        'save_model_path': '../checkpoints/twitter15/',
-        'epoch_num': 100,#1000
-        'batch_size': 32,
-        'emb_size': 64,
-        # 'gat_hidden_size':32,
-        'learning_rate': 1e-4,
-        'neg_size': 5,
-        'hist_len': 3,
-        'directed': False,
-        'save_step': 50,
-        'optimization': 'Adam',#SGD: NaN in the 247-graph
-        'tlp_flag':False,
-        'trend_prediction':False,
-        'epsilon1': 1, # local loss
-        'epsilon2': 1,# global loss
-        'epsilon':10}
-    print ('parameters: \r\n{}'.format(parameters_dict))
+    # parameters_dict = {
+    #     'file_path': '../rumor_detection_acl2017/twitter15/',
+    #     'save_graph_path':'../rumor_detection_acl2017/twitter15/graph_obj/',
+    #     'model_name': 'MMDNE_twitter15',
+    #     'save_model_path': '../checkpoints/twitter15/',
+    #     'epoch_num': 100,#1000
+    #     'batch_size': 32,
+    #     'emb_size': 64,
+    #     # 'gat_hidden_size':32,
+    #     'learning_rate': 1e-4,
+    #     'neg_size': 5,
+    #     'hist_len': 3,
+    #     'directed': False,
+    #     'save_step': 50,
+    #     'optimization': 'Adam',#SGD: NaN in the 247-graph
+    #     'tlp_flag':False,
+    #     'trend_prediction':False,
+    #     'epsilon1': 1, # local loss
+    #     'epsilon2': 1,# global loss
+    #     'epsilon':10}
+    # print ('parameters: \r\n{}'.format(parameters_dict))
 
-    parser = argparse.ArgumentParser(description='Train the TPP network.')
-    parser.add_argument('--dataset', choices=["twitter15", "twitter16"],
-                        help='Training dataset', default="twitter15")
-    parser.add_argument('--optimizer', choices=["Adam", "SGD"],
-                        help='optimizer', default="Adam")
-    parser.add_argument('--learning_rate', default=1e-4, type=float,
-                        help='learning rate')
-    parser.add_argument('--epoch_num', default=100, type=int,
-                        help='Number of epochs')
-    parser.add_argument('--oversampling_ratio', default=1, type=int,
-                        help='Oversampling ratio for data augmentation')
-    # parser.add_argument('--dropout', default=0.0, type=float,
-    #                 help='dropout for TGS_stack')
-    parser.add_argument('--batch_size', default=32, type=int,
-                        help='Batch_size')
-    parser.add_argument('--emb_size', default=64, type=int,
-                        help='embedding_size')
-    parser.add_argument('--only_binary', action='store_true',
-                        help='Reduces the problem to binary classification')
-    parser.add_argument('--neg_size', default=5, type=int,
-                        help='negative sample number')
-    parser.add_argument('--hist_len', default=3, type=int,
-                        help='history node number')
-    parser.add_argument('--standardize', action='store_true',
-                        help='Standardize features')
-    parser.add_argument('--features', choices=["all", "text_only", "user_only"],
-                        help='Features to consider', default="all")
-    parser.add_argument('--time_cutoff',
-                        help='Time cutoff in mins', default="None")
-    parser.add_argument('--seed', default=64, type=int,
-                        help='Seed for train/val/test split')
-    parser.add_argument('--patience', type=int, default=5, help='Patience for early stopping')
-    parser.add_argument('--dropout', type=float, default=0.1, help='Dropout probability')
-    parser.add_argument('--epsilon', type=float, default=10, help='veracity loss co-efficient')
-    parser.add_argument('--epsilon1', type=float, default=1, help='local loss co-efficient')
-    parser.add_argument('--epsilon2', type=float, default=1, help='global loss co-efficient')
-    parser.add_argument('--gpu', type=int, default=1, help='Idx for the gpu to use')
-    parser.add_argument('--backprop_every', type=int, default=10, help='Every how many batches to '
-                                                                      'backprop')
-    args = parser.parse_args()
-    print(args)
-
-    device_string = 'cuda:{}'.format(args.gpu) if torch.cuda.is_available() else 'cpu'
-    device = torch.device(device_string)
-
-    model_name = 'MMDNE_'+ args.dataset
-    data_file_path = '../rumor_detection_acl2017/' + args.dataset
-    save_graph_path = data_file_path + '/graph_obj'
-    save_model_path = '../checkpoints/' + args.dataset
-
-    if not os.path.exists(save_graph_path):
-        os.mkdir(save_graph_path)
-    if not os.path.exists(save_model_path):
-        os.mkdir(save_model_path)
 
     mmdne = MMDNE(file_path=data_file_path,
                   save_graph_path = save_graph_path,
