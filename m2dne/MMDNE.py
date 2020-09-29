@@ -540,7 +540,7 @@ def eval_veracity_func(mmdne, news_id_consider):
             output = mmdne.veracity_predict(news_id)
             _, pred = output.max(dim=1)
             label = mmdne.labels[news_id]
-            y = torch.tensor(to_label(label))
+            y = torch.tensor(to_label(label)).to(device)
             correct += float(pred.eq(y).sum().item())
 
             ## buggy
