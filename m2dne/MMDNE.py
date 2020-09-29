@@ -77,14 +77,14 @@ class MMDNE(nn.Module):
         ## initialize model trainable parameters
 
         # ??? single delta value for all nodes
-        self.delta_s = Variable((torch.ones(1)).type(FType), requires_grad=True).to(device)
-        self.delta_t = Variable((torch.ones(1)).type(FType), requires_grad=True).to(device)
+        self.delta_s = Variable((torch.ones(1)).type(FType), requires_grad=True, device=device)
+        self.delta_t = Variable((torch.ones(1)).type(FType), requires_grad=True, device=device)
 
-        self.zeta = Variable((torch.ones(1)).type(FType), requires_grad=True).to(device)
-        self.gamma = Variable((torch.ones(1)).type(FType), requires_grad=True).to(device)
-        self.theta = Variable((torch.ones(1)).type(FType), requires_grad=True).to(device)
+        self.zeta = Variable((torch.ones(1)).type(FType), requires_grad=True, device=device)
+        self.gamma = Variable((torch.ones(1)).type(FType), requires_grad=True, device=device)
+        self.theta = Variable((torch.ones(1)).type(FType), requires_grad=True, device=device)
 
-        self.a = torch.nn.Parameter(torch.zeros(size=(2 * self.emb_size, 1)),requires_grad=True)
+        self.a = torch.nn.Parameter(torch.zeros(size=(2 * self.emb_size, 1)),requires_grad=True, device=device)
         # self.a = torch.nn.Parameter(torch.zeros(size=(2 * self.gat_hidden_size, 1)))
         torch.nn.init.xavier_uniform_(self.a.data, gain=1.414)
 
