@@ -143,7 +143,7 @@ class MMDNE(nn.Module):
                 tweet_fts=tweet_fts.view(batch_size, dim_size, -1)
 
         # node_fts = user_fts
-        node_fts = torch.cat([user_fts, tweet_fts], dim=-1)
+        node_fts = torch.cat([user_fts, tweet_fts], dim=-1).to(device)
         node_emb = self.fts2emb(node_fts)  # (bach, emb_dim)
         return node_emb
 
@@ -152,10 +152,10 @@ class MMDNE(nn.Module):
                       t_h_nodes, t_h_times, t_h_time_mask,
                       s_neg_node,t_neg_node,news_id):
 
-        s_node_emb = self.get_emb_from_id(s_nodes,news_id, dim_num=2).to(device)
-        t_node_emb = self.get_emb_from_id(t_nodes,news_id, dim_num=2).to(device)
-        s_h_node_emb = self.get_emb_from_id(s_h_nodes,news_id, dim_num=3, dim_size=self.hist_len).to(device)
-        # t_h_node_emb = self.get_emb_from_id(t_h_nodes,news_id, dim_num=3,dim_size=self.hist_len).to(device)
+        s_node_emb = self.get_emb_from_id(s_nodes,news_id, dim_num=2)
+        t_node_emb = self.get_emb_from_id(t_nodes,news_id, dim_num=2)
+        s_h_node_emb = self.get_emb_from_id(s_h_nodes,news_id, dim_num=3, dim_size=self.hist_len)
+        # t_h_node_emb = self.get_emb_from_id(t_h_nodes,news_id, dim_num=3,dim_size=self.hist_len)
 
         delta_s = self.delta_s#.index_select(0, Variable(s_nodes.view(-1))).unsqueeze(1)  # (b,1)
         d_time_s = torch.abs(e_times.unsqueeze(1) - s_h_times)  # (batch, hist_len)
@@ -226,8 +226,8 @@ class MMDNE(nn.Module):
                    + aaa \
                    # + bbb # remove the history of t_node
 
-        # s_n_node_emb = self.get_emb_from_id(s_neg_node,news_id, dim_num=3, dim_size=self.neg_size).to(device)
-        t_n_node_emb = self.get_emb_from_id(t_neg_node,news_id,dim_num=3, dim_size=self.neg_size).to(device)
+        # s_n_node_emb = self.get_emb_from_id(s_neg_node,news_id, dim_num=3, dim_size=self.neg_size)
+        t_n_node_emb = self.get_emb_from_id(t_neg_node,news_id,dim_num=3, dim_size=self.neg_size)
 
         n_mu_s = self.bilinear(s_node_emb.unsqueeze(1).repeat(1, self.neg_size, 1), t_n_node_emb).squeeze(-1)  # (batch, neg_len)
         # n_mu_t = self.bilinear(t_node_emb.unsqueeze(1).repeat(1, self.neg_size, 1), s_n_node_emb).squeeze(-1)
@@ -253,8 +253,8 @@ class MMDNE(nn.Module):
         return p_lambda, n_lambda_s#, n_lambda_t  # max p_lambda, min n_lambda
 
     def global_forward(self, s_nodes, t_nodes, e_times, node_sum,news_id):
-        s_node_emb = self.get_emb_from_id(s_nodes,news_id,dim_num=2).to(device)
-        t_node_emb = self.get_emb_from_id(t_nodes,news_id,dim_num=2).to(device)
+        s_node_emb = self.get_emb_from_id(s_nodes,news_id,dim_num=2)
+        t_node_emb = self.get_emb_from_id(t_nodes,news_id,dim_num=2)
 
         beta = torch.sigmoid(self.bilinear(s_node_emb, t_node_emb)).squeeze(-1) # (batch) Equation-11 torch.sigmoid
         r_t = beta / torch.pow(Variable(e_times).to(device)+1e-5, self.theta)
@@ -304,10 +304,10 @@ class MMDNE(nn.Module):
     def veracity_predict(self, news_id):
 
         first_node_id = self.graph_data_dict[news_id].first_node
-        first_node_emb = self.get_emb_from_id(first_node_id,news_id,dim_num=1).view(1,-1).to(device)# (1, emb_dim)
+        first_node_emb = self.get_emb_from_id(first_node_id,news_id,dim_num=1).view(1,-1)# (1, emb_dim)
 
         all_node_id = self.graph_data_dict[news_id].node_list
-        all_node_emb = self.get_emb_from_id(all_node_id,news_id,dim_num=2).to(device)
+        all_node_emb = self.get_emb_from_id(all_node_id,news_id,dim_num=2)
 
         all_node_emb_mean = torch.mean(all_node_emb,dim=0).view(1,-1)# (1, emb_dim)
         all_node_emb_max_tpl = torch.max(all_node_emb, dim=0)
@@ -544,9 +544,9 @@ def eval_temporal_pred(mmdne, news_id_consider):
                                 sample_batched['neg_s_nodes'],
                                 sample_batched['neg_t_nodes'],
                                 sample_batched['delta_e_true'].type(FType),
-                                sample_batched['delta_n_true'].type(FType),
+                                # sample_batched['delta_n_true'].type(FType),
                                 sample_batched['node_sum'].type(FType),
-                                sample_batched['edge_last_time_sum'].type(FType),
+                                # sample_batched['edge_last_time_sum'].type(FType),
                                 news_id
                                 )
 
