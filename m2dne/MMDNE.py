@@ -75,14 +75,22 @@ class MMDNE(nn.Module):
                            only_binary, seed, tlp_flag, trend_prediction)
 
         ## initialize model trainable parameters
-
+        if torch.cuda.is_available():
         # ??? single delta value for all nodes
-        self.delta_s = Variable((torch.ones(1)).type(FType), requires_grad=True)
-        self.delta_t = Variable((torch.ones(1)).type(FType), requires_grad=True)
+            self.delta_s = Variable((torch.ones(1)).type(FType).cuda(), requires_grad=True)
+            self.delta_t = Variable((torch.ones(1)).type(FType).cuda(), requires_grad=True)
 
-        self.zeta = Variable((torch.ones(1)).type(FType), requires_grad=True)
-        self.gamma = Variable((torch.ones(1)).type(FType), requires_grad=True)
-        self.theta = Variable((torch.ones(1)).type(FType), requires_grad=True)
+            self.zeta = Variable((torch.ones(1)).type(FType).cuda(), requires_grad=True)
+            self.gamma = Variable((torch.ones(1)).type(FType).cuda(), requires_grad=True)
+            self.theta = Variable((torch.ones(1)).type(FType).cuda(), requires_grad=True)
+        else:
+            self.delta_s = Variable((torch.ones(1)).type(FType), requires_grad=True)
+            self.delta_t = Variable((torch.ones(1)).type(FType), requires_grad=True)
+
+            self.zeta = Variable((torch.ones(1)).type(FType), requires_grad=True)
+            self.gamma = Variable((torch.ones(1)).type(FType), requires_grad=True)
+            self.theta = Variable((torch.ones(1)).type(FType), requires_grad=True)
+
 
         self.a = torch.nn.Parameter(torch.zeros(size=(2 * self.emb_size, 1)),requires_grad=True)
         # self.a = torch.nn.Parameter(torch.zeros(size=(2 * self.gat_hidden_size, 1)))
