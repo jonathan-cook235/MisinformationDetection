@@ -16,6 +16,7 @@ import torch.nn.functional as F
 import numpy as np
 import sys
 import os
+import argparse
 from process_data import create_dataset, to_label
 
 from torch import autograd
@@ -32,8 +33,9 @@ DID = 0
 class MMDNE(nn.Module):
     def __init__(self, file_path, save_graph_path,model_name,save_model_path,
                  emb_size=32, neg_size=10, hist_len=2, directed=False,
-                 learning_rate=0.01, batch_size=1000, save_step=10, epoch_num=1, optim='SGD',
-                 tlp_flag=False, trend_prediction=False, only_binary=True,seed=64,
+                 learning_rate=0.01, batch_size=1000, epoch_num=1, optim='SGD',
+                 only_binary=True,seed=64, backprop_every = 10,
+                 tlp_flag=False, trend_prediction=False,device='cpu',
                  epsilon=1.0, epsilon1=1.0,epsilon2=1.0, dropout=0.1
     ):
         super(MMDNE, self).__init__()
@@ -46,16 +48,15 @@ class MMDNE(nn.Module):
 
         self.epochs = epoch_num
         self.batch_size = batch_size
-        self.save_step = save_step
         self.model_name = model_name
         self.save_model_path = save_model_path
+        self.backprop_every = backprop_every
+        self.device = device
 
         self.seed = seed
         self.dropout = dropout
         self.lr = learning_rate
         self.optim = optim
-        self.tlp_flag = tlp_flag
-        self.trend_prediction = trend_prediction
 
         self.epsilon = epsilon
         self.epsilon1=epsilon1
@@ -78,12 +79,12 @@ class MMDNE(nn.Module):
         ## initialize model trainable parameters
 
         # ??? single delta value for all nodes
-        self.delta_s = Variable((torch.ones(1)).type(FType), requires_grad=True)
-        self.delta_t = Variable((torch.ones(1)).type(FType), requires_grad=True)
+        self.delta_s = Variable((torch.ones(1)).type(FType), requires_grad=True).to(device)
+        self.delta_t = Variable((torch.ones(1)).type(FType), requires_grad=True).to(device)
 
-        self.zeta = Variable((torch.ones(1)).type(FType), requires_grad=True)
-        self.gamma = Variable((torch.ones(1)).type(FType), requires_grad=True)
-        self.theta = Variable((torch.ones(1)).type(FType), requires_grad=True)
+        self.zeta = Variable((torch.ones(1)).type(FType), requires_grad=True).to(device)
+        self.gamma = Variable((torch.ones(1)).type(FType), requires_grad=True).to(device)
+        self.theta = Variable((torch.ones(1)).type(FType), requires_grad=True).to(device)
 
         self.a = torch.nn.Parameter(torch.zeros(size=(2 * self.emb_size, 1)),requires_grad=True)
         # self.a = torch.nn.Parameter(torch.zeros(size=(2 * self.gat_hidden_size, 1)))
@@ -150,10 +151,10 @@ class MMDNE(nn.Module):
                       t_h_nodes, t_h_times, t_h_time_mask,
                       s_neg_node,t_neg_node,news_id):
 
-        s_node_emb = self.get_emb_from_id(s_nodes,news_id, dim_num=2)
-        t_node_emb = self.get_emb_from_id(t_nodes,news_id, dim_num=2)
-        s_h_node_emb = self.get_emb_from_id(s_h_nodes,news_id, dim_num=3, dim_size=self.hist_len)
-        # t_h_node_emb = self.get_emb_from_id(t_h_nodes,news_id, dim_num=3,dim_size=self.hist_len)
+        s_node_emb = self.get_emb_from_id(s_nodes,news_id, dim_num=2).to(device)
+        t_node_emb = self.get_emb_from_id(t_nodes,news_id, dim_num=2).to(device)
+        s_h_node_emb = self.get_emb_from_id(s_h_nodes,news_id, dim_num=3, dim_size=self.hist_len).to(device)
+        # t_h_node_emb = self.get_emb_from_id(t_h_nodes,news_id, dim_num=3,dim_size=self.hist_len).to(device)
 
         delta_s = self.delta_s#.index_select(0, Variable(s_nodes.view(-1))).unsqueeze(1)  # (b,1)
         d_time_s = torch.abs(e_times.unsqueeze(1) - s_h_times)  # (batch, hist_len)
@@ -167,7 +168,7 @@ class MMDNE(nn.Module):
         for i in range(self.hist_len):
             s_h_node_emb_i = torch.transpose(s_h_node_emb[:, i:(i + 1), :], dim0=1, dim1=2).squeeze()  # (b, dim)
             s_node_emb_i = s_node_emb  # (b, dim)
-            d_time_s_i = Variable(d_time_s)[:,i:(i+1)]
+            d_time_s_i = Variable(d_time_s)[:,i:(i+1)].to(device)
             if i == 0:
                 # a_input = torch.cat([torch.mm(s_node_emb_i, self.W),torch.mm(s_h_node_emb_i, self.W)],dim=1)  # (b, 2*dim)
                 a_input = torch.cat([s_node_emb_i, s_h_node_emb_i],dim=1)  # (b, 2*dim)
@@ -216,7 +217,7 @@ class MMDNE(nn.Module):
         p_alpha_s = self.bilinear(s_h_node_emb, t_node_emb.unsqueeze(1).repeat(1, self.hist_len, 1)).squeeze(-1)# batch-size, hist-len, emb-size
         # p_alpha_t = self.bilinear(t_h_node_emb, s_node_emb.unsqueeze(1).repeat(1, self.hist_len, 1)).squeeze(-1)
 
-        aaa = (att_s_his_s * p_alpha_s * torch.exp(delta_s * Variable(d_time_s)) * Variable(s_h_time_mask)).sum(dim=1)
+        aaa = (att_s_his_s * p_alpha_s * torch.exp(delta_s * Variable(d_time_s).to(device)) * Variable(s_h_time_mask).to(device)).sum(dim=1)
         # aaa = global_att_s * (att_s_his_s * p_alpha_s * torch.exp(delta_s * Variable(d_time_s)) * Variable(s_h_time_mask)).sum(dim=1)
         # bbb = global_att_t * (att_t_his_t * p_alpha_t * torch.exp(delta_t * Variable(d_time_t)) * Variable(t_h_time_mask)).sum(dim=1)
 
@@ -224,8 +225,8 @@ class MMDNE(nn.Module):
                    + aaa \
                    # + bbb # remove the history of t_node
 
-        # s_n_node_emb = self.get_emb_from_id(s_neg_node,news_id, dim_num=3, dim_size=self.neg_size)
-        t_n_node_emb = self.get_emb_from_id(t_neg_node,news_id,dim_num=3, dim_size=self.neg_size)
+        # s_n_node_emb = self.get_emb_from_id(s_neg_node,news_id, dim_num=3, dim_size=self.neg_size).to(device)
+        t_n_node_emb = self.get_emb_from_id(t_neg_node,news_id,dim_num=3, dim_size=self.neg_size).to(device)
 
         n_mu_s = self.bilinear(s_node_emb.unsqueeze(1).repeat(1, self.neg_size, 1), t_n_node_emb).squeeze(-1)  # (batch, neg_len)
         # n_mu_t = self.bilinear(t_node_emb.unsqueeze(1).repeat(1, self.neg_size, 1), s_n_node_emb).squeeze(-1)
@@ -235,8 +236,8 @@ class MMDNE(nn.Module):
         # n_alpha_t = self.bilinear(t_h_node_emb.unsqueeze(2).repeat(1, 1, self.neg_size, 1),
         #                           s_n_node_emb.unsqueeze(1).repeat(1, self.hist_len, 1, 1)).squeeze(-1)
 
-        n_lambda_s = n_mu_s + (att_s_his_s.unsqueeze(2) * n_alpha_s * (torch.exp(delta_s * Variable(d_time_s)).unsqueeze(2))
-                               * (Variable(s_h_time_mask).unsqueeze(2))).sum(dim=1)  # TODO: global_att_s.unsqueeze(1)
+        n_lambda_s = n_mu_s + (att_s_his_s.unsqueeze(2) * n_alpha_s * (torch.exp(delta_s * Variable(d_time_s).to(device)).unsqueeze(2))
+                               * (Variable(s_h_time_mask).unsqueeze(2)).to(device)).sum(dim=1)  # TODO: global_att_s.unsqueeze(1)
 
         # n_lambda_s = n_mu_s \
         #              + global_att_s.unsqueeze(1) * (att_s_his_s.unsqueeze(2) * n_alpha_s
@@ -250,14 +251,14 @@ class MMDNE(nn.Module):
 
         return p_lambda, n_lambda_s#, n_lambda_t  # max p_lambda, min n_lambda
 
-    def global_forward(self, s_nodes, t_nodes, e_times, delta_n_true, node_sum, edge_last_time_sum,news_id):
-        s_node_emb = self.get_emb_from_id(s_nodes,news_id,dim_num=2)
-        t_node_emb = self.get_emb_from_id(t_nodes,news_id,dim_num=2)
+    def global_forward(self, s_nodes, t_nodes, e_times, node_sum,news_id):
+        s_node_emb = self.get_emb_from_id(s_nodes,news_id,dim_num=2).to(device)
+        t_node_emb = self.get_emb_from_id(t_nodes,news_id,dim_num=2).to(device)
 
         beta = torch.sigmoid(self.bilinear(s_node_emb, t_node_emb)).squeeze(-1) # (batch) Equation-11 torch.sigmoid
-        r_t = beta / torch.pow(Variable(e_times)+1e-5, self.theta)
+        r_t = beta / torch.pow(Variable(e_times).to(device)+1e-5, self.theta)
         # delta_e_pred cannot be  negative
-        delta_e_pred = torch.relu( r_t * Variable(node_sum) * (self.zeta * torch.pow(Variable(node_sum-1), self.gamma))) # Equation-10
+        delta_e_pred = torch.relu( r_t * Variable(node_sum) * (self.zeta * torch.pow(Variable(node_sum-1).to(device), self.gamma))) # Equation-10
 
         if torch.isnan(delta_e_pred).any():
             print('beta',beta,'e_times',e_times,'self.theta',self.theta,
@@ -285,11 +286,11 @@ class MMDNE(nn.Module):
 
         return loss
 
-    def global_loss(self,s_nodes, t_nodes, e_times, delta_e_true, delta_n_true, node_sum, edge_last_time_sum,news_id):
-        delta_e_pred = self.global_forward(s_nodes, t_nodes, e_times, delta_n_true, node_sum, edge_last_time_sum,news_id)
+    def global_loss(self,s_nodes, t_nodes, e_times, delta_e_true, node_sum,news_id):
+        delta_e_pred = self.global_forward(s_nodes, t_nodes, e_times, node_sum,news_id)
         criterion = torch.nn.MSELoss()
 
-        loss = criterion(torch.log(delta_e_pred + 1e-5), torch.log(Variable(delta_e_true) + 1e-5))
+        loss = criterion(torch.log(delta_e_pred + 1e-5), torch.log(Variable(delta_e_true).to(device) + 1e-5))
         # loss = ((delta_e_pred - Variable(delta_e_true))**2).mean(dim=-1)
         if torch.isnan(loss):
             print('delta_e_pred',delta_e_pred, 'delta_e_true',delta_e_true,
@@ -302,10 +303,10 @@ class MMDNE(nn.Module):
     def veracity_predict(self, news_id):
 
         first_node_id = self.graph_data_dict[news_id].first_node
-        first_node_emb = self.get_emb_from_id(first_node_id,news_id,dim_num=1).view(1,-1)# (1, emb_dim)
+        first_node_emb = self.get_emb_from_id(first_node_id,news_id,dim_num=1).view(1,-1).to(device)# (1, emb_dim)
 
         all_node_id = self.graph_data_dict[news_id].node_list
-        all_node_emb = self.get_emb_from_id(all_node_id,news_id,dim_num=2)
+        all_node_emb = self.get_emb_from_id(all_node_id,news_id,dim_num=2).to(device)
 
         all_node_emb_mean = torch.mean(all_node_emb,dim=0).view(1,-1)# (1, emb_dim)
         all_node_emb_max_tpl = torch.max(all_node_emb, dim=0)
@@ -346,21 +347,27 @@ class MMDNE(nn.Module):
                                      t_h_nodes, t_h_times, t_h_time_mask,
                                      neg_s_node, neg_t_node,news_id)
 
-        #global_loss = self.global_loss(s_nodes, t_nodes, e_times,
-        #                               delta_e_true, delta_n_true, node_sum, edge_last_time_sum,news_id)
+        global_loss = self.global_loss(s_nodes, t_nodes, e_times,
+                                      delta_e_true, node_sum,news_id)
         vera_loss = self.veracity_loss(news_id)
 
         weighted_local_loss = self.epsilon1 * local_loss.sum()
-        weighted_global_loss = weighted_local_loss
-        #weighted_global_loss = self.epsilon2 * global_loss.sum()
+        # weighted_global_loss = weighted_local_loss
+        weighted_global_loss = self.epsilon2 * global_loss.sum()
         weighted_vera_loss = self.epsilon * vera_loss
 
-        loss = weighted_local_loss + weighted_vera_loss #+ weighted_global_loss
+        loss = weighted_local_loss + weighted_vera_loss + weighted_global_loss
 
         return loss, weighted_local_loss, weighted_global_loss, weighted_vera_loss
 
     def train_func(self):
-        i_batch = 0
+        graph_batch = 0
+        graph_batch_loss = 0
+        graph_batch_local_loss = 0
+        graph_batch_global_loss = 0
+        graph_batch_vera_loss = 0
+        total_num_datapoints = 0
+
         news_id_list = list(self.graph_data_dict.keys())
         print('training...')
         for epoch in range(self.epochs):
@@ -371,15 +378,12 @@ class MMDNE(nn.Module):
                     continue
                 # print('news_id: ',news_id)
                 ## for each graph
+                graph_batch += 1
                 graph_data = self.graph_data_dict[news_id]
+                total_num_datapoints += len(graph_data)
                 loader = DataLoader(graph_data, batch_size=self.batch_size, shuffle=True, num_workers=10)
 
-                total_batch_loss = 0
-                total_batch_local_loss = 0
-                total_batch_global_loss = 0
-                total_batch_vera_loss = 0
                 for _, sample_batched in enumerate(loader):
-
                     #str
                     batch_loss, batch_local_loss, batch_global_loss, batch_vera_loss = \
                         self.update(sample_batched['source_node'],
@@ -399,24 +403,37 @@ class MMDNE(nn.Module):
                                     sample_batched['edge_last_time_sum'].type(FType),
                                     news_id
                                     )
-                    batch_loss.backward()
+                    # batch_loss.backward()
+                    # self.opt.step()
+
+                    graph_batch_loss += batch_loss
+                    graph_batch_local_loss += batch_local_loss
+                    graph_batch_global_loss += batch_global_loss
+                    graph_batch_vera_loss += batch_vera_loss
+
+                if graph_batch % self.backprop_every == 0: # itrate 10 grahs
+                    # back-propagation
+                    graph_batch_loss.backward()
                     self.opt.step()
 
-                    total_batch_loss += batch_loss.detach().numpy()
-                    total_batch_local_loss += batch_local_loss.detach().numpy()
-                    total_batch_global_loss += batch_global_loss.detach().numpy()
-                    total_batch_vera_loss += batch_vera_loss.detach().numpy()
+                    # if num %10 == 0:
+                    print('epoch-{} graph_batch-{} news_id-{} : '
+                          'avg loss = {:.5f}, '
+                          'avg local loss = {:.5f}, '
+                          'avg global loss = {:.5f}, '
+                          'avg veracity loss = {:.5f} '
+                          'of {} datapoints\n'.format(epoch, graph_batch, news_id,
+                                                      graph_batch_loss.detach().numpy() / total_num_datapoints,
+                                                      graph_batch_local_loss.detach().numpy() / total_num_datapoints,
+                                                      graph_batch_global_loss.detach().numpy() / total_num_datapoints,
+                                                      graph_batch_vera_loss.detach().numpy() / total_num_datapoints,
+                                                      total_num_datapoints))
 
-                if num %10 == 0:
-                    print('epoch-{} num-{} news_id-{} : '
-                          'avg loss = {:.3f}, '
-                          'avg local loss = {:.3f}, '
-                          'avg global loss = {:.3f}, '
-                          'avg veracity loss = {:.3f}\n'.format(epoch, num, news_id,
-                                                 total_batch_loss / len(graph_data),
-                                                 total_batch_local_loss / len(graph_data),
-                                                 total_batch_global_loss / len(graph_data),
-                                                 total_batch_vera_loss / len(graph_data)))
+                    graph_batch_loss = 0
+                    graph_batch_local_loss = 0
+                    graph_batch_global_loss = 0
+                    graph_batch_vera_loss = 0
+                    total_num_datapoints = 0
 
             if epoch % 1 == 0:# and epoch != 0:
                 self.eval()
@@ -424,33 +441,33 @@ class MMDNE(nn.Module):
                 ## Evaluate the temporal predictions
                 val_loss, val_local_loss, val_global_loss, val_vera_loss, val_num_datapoints =\
                     self.eval_temporal_pred(self.val_ids)
-                print('\tValdation: avg loss = {:.3f}, '
-                      'avg local loss = {:.3f}, '
-                      'avg global loss = {:.3f}, '
-                      'avg veracity loss = {:.3f}\n'.format(val_loss / val_num_datapoints,
+                print('\tValdation: avg loss = {:.5f}, '
+                      'avg local loss = {:.5f}, '
+                      'avg global loss = {:.5f}, '
+                      'avg veracity loss = {:.5f}\n'.format(val_loss / val_num_datapoints,
                                                             val_local_loss / val_num_datapoints,
                                                             val_global_loss / val_num_datapoints,
                                                             val_vera_loss / val_num_datapoints))
 
                 test_loss, test_local_loss, test_global_loss, test_vera_loss, test_num_datapoints = \
                     self.eval_temporal_pred(self.test_ids)
-                print('\tTest: avg loss = {:.3f}, '
-                      'avg local loss = {:.3f}, '
-                      'avg global loss = {:.3f}, '
-                      'avg veracity loss = {:.3f}\n'.format(test_loss / test_num_datapoints,
+                print('\tTest: avg loss = {:.5f}, '
+                      'avg local loss = {:.5f}, '
+                      'avg global loss = {:.5f}, '
+                      'avg veracity loss = {:.5f}\n'.format(test_loss / test_num_datapoints,
                                                             test_local_loss / test_num_datapoints,
                                                             test_global_loss / test_num_datapoints,
                                                             test_vera_loss / test_num_datapoints))
 
                 # Evaluate veracity classification
                 train_acc, train_correct, train_n_samples = self.eval_veracity_func(self.train_ids)
-                print('--train accuracy: {:.3f}, correct {} out of {}'.format(train_acc, train_correct, train_n_samples))
+                print('--train accuracy: {:.5f}, correct {} out of {}'.format(train_acc, train_correct, train_n_samples))
 
                 val_acc, val_correct, val_n_samples = self.eval_veracity_func(self.val_ids)
-                print('--validation accuracy: {:.3f}, correct {} out of {}'.format(val_acc, val_correct, val_n_samples))
+                print('--validation accuracy: {:.5f}, correct {} out of {}'.format(val_acc, val_correct, val_n_samples))
 
                 test_acc, test_correct, test_n_samples = self.eval_veracity_func(self.test_ids)
-                print('--test accuracy: {:.3f}, correct {} out of {}'.format(test_acc, test_correct, test_n_samples))
+                print('--test accuracy: {:.5f}, correct {} out of {}'.format(test_acc, test_correct, test_n_samples))
 
     def eval_veracity_func(self, news_id_consider):
 
@@ -540,26 +557,6 @@ class MMDNE(nn.Module):
             
         return total_loss, total_local_loss, total_global_loss, total_vera_loss, total_num_datapoints
 
-    # def save_node_embeddings(self, path):
-        #     if torch.cuda.is_available():
-        #         embeddings = self.node_emb.cpu().data.numpy()
-        #     else:
-        #         embeddings = self.node_emb.data.numpy()
-        #     ## XXX ##
-        #     # for count in self.node_dim:
-        #     #     writer = open(path, 'w')
-        #     #     writer.write('%d %d\n' % (self.node_dim[count], self.emb_size))
-        #     #     for n_idx in range(self.node_dim[count]):
-        #     #         writer.write(' '.join(str(d) for d in embeddings[n_idx]) + '\n')
-        #     #     writer.close()
-        #     #     return embeddings
-        #
-        #     writer = open(path, 'w')
-        #     writer.write('%d %d\n' % (self.node_dim, self.emb_size))
-        #     for n_idx in range(self.node_dim):
-        #         writer.write(' '.join(str(d) for d in embeddings[n_idx]) + '\n')
-        #     writer.close()
-
 
 if __name__ == '__main__':
     train_mode =  True
@@ -586,31 +583,77 @@ if __name__ == '__main__':
         'epsilon':10}
     print ('parameters: \r\n{}'.format(parameters_dict))
 
-    if not os.path.exists(parameters_dict['save_graph_path']):
-        os.mkdir(parameters_dict['save_graph_path'])
-    if not os.path.exists(parameters_dict['save_model_path']):
-        os.mkdir(parameters_dict['save_model_path'])
+    parser = argparse.ArgumentParser(description='Train the TPP network.')
+    parser.add_argument('--dataset', choices=["twitter15", "twitter16"],
+                        help='Training dataset', default="twitter15")
+    parser.add_argument('--optimizer', choices=["Adam", "SGD"],
+                        help='optimizer', default="Adam")
+    parser.add_argument('--learning_rate', default=1e-4, type=float,
+                        help='learning rate')
+    parser.add_argument('--epoch_num', default=100, type=int,
+                        help='Number of epochs')
+    parser.add_argument('--oversampling_ratio', default=1, type=int,
+                        help='Oversampling ratio for data augmentation')
+    # parser.add_argument('--dropout', default=0.0, type=float,
+    #                 help='dropout for TGS_stack')
+    parser.add_argument('--batch_size', default=32, type=int,
+                        help='Batch_size')
+    parser.add_argument('--emb_size', default=64, type=int,
+                        help='embedding_size')
+    parser.add_argument('--only_binary', action='store_true',
+                        help='Reduces the problem to binary classification')
+    parser.add_argument('--neg_size', default=5, type=int,
+                        help='negative sample number')
+    parser.add_argument('--hist_len', default=3, type=int,
+                        help='history node number')
+    parser.add_argument('--standardize', action='store_true',
+                        help='Standardize features')
+    parser.add_argument('--features', choices=["all", "text_only", "user_only"],
+                        help='Features to consider', default="all")
+    parser.add_argument('--time_cutoff',
+                        help='Time cutoff in mins', default="None")
+    parser.add_argument('--seed', default=64, type=int,
+                        help='Seed for train/val/test split')
+    parser.add_argument('--patience', type=int, default=5, help='Patience for early stopping')
+    parser.add_argument('--dropout', type=float, default=0.1, help='Dropout probability')
+    parser.add_argument('--epsilon', type=float, default=10, help='veracity loss co-efficient')
+    parser.add_argument('--epsilon1', type=float, default=1, help='local loss co-efficient')
+    parser.add_argument('--epsilon2', type=float, default=1, help='global loss co-efficient')
+    parser.add_argument('--gpu', type=int, default=1, help='Idx for the gpu to use')
+    parser.add_argument('--backprop_every', type=int, default=10, help='Every how many batches to '
+                                                                      'backprop')
+    args = parser.parse_args()
+    print(args)
 
-    mmdne = MMDNE(file_path=parameters_dict['file_path'],
-                  save_graph_path = parameters_dict['save_graph_path'],
-                  model_name=parameters_dict['model_name'],
-                  save_model_path=parameters_dict['save_model_path'],
-                  save_step=parameters_dict['save_step'],
-                  directed=parameters_dict['directed'],
-                  epoch_num=parameters_dict['epoch_num'],
-                  # gat_hidden_size=parameters_dict['gat_hidden_size'],
-                  hist_len=parameters_dict['hist_len'],
-                  emb_size=parameters_dict['emb_size'],
-                  neg_size=parameters_dict['neg_size'],
-                  learning_rate=parameters_dict['learning_rate'],
-                  batch_size=parameters_dict['batch_size'],
-                  optim=parameters_dict['optimization'],
-                  tlp_flag=parameters_dict['tlp_flag'],
-                  trend_prediction=parameters_dict['trend_prediction'],
-                  epsilon1=parameters_dict['epsilon1'],
-                  epsilon2=parameters_dict['epsilon2'],
-                  epsilon=parameters_dict['epsilon'])
-    print('parameters: \r\n{}'.format(parameters_dict))
+    device_string = 'cuda:{}'.format(args.gpu) if torch.cuda.is_available() else 'cpu'
+    device = torch.device(device_string)
+
+    model_name = 'MMDNE_'+ args.dataset
+    data_file_path = '../rumor_detection_acl2017/' + args.dataset
+    save_graph_path = data_file_path + '/graph_obj'
+    save_model_path = '../checkpoints/' + args.dataset
+
+    if not os.path.exists(save_graph_path):
+        os.mkdir(save_graph_path)
+    if not os.path.exists(save_model_path):
+        os.mkdir(save_model_path)
+
+    mmdne = MMDNE(file_path=data_file_path,
+                  save_graph_path = save_graph_path,
+                  model_name=model_name,
+                  save_model_path=save_model_path,
+                  epoch_num=args.epoch_num,
+                  hist_len=args.hist_len,
+                  emb_size=args.emb_size,
+                  neg_size=args.neg_size,
+                  learning_rate=args.learning_rate,
+                  batch_size=args.batch_size,
+                  optim=args.optimizer,
+                  epsilon1=args.epsilon1,
+                  epsilon2=args.epsilon2,
+                  epsilon=args.epsilon,
+                  backprop_every = args.backprop_every,
+                  device = device).to(device)
 
     if train_mode:
     # with autograd.detect_anomaly():
