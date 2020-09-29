@@ -316,9 +316,9 @@ class MMDNE(nn.Module):
 
         if torch.isnan(delta_e_pred).any():
             print('beta',beta,'e_times',e_times,'self.theta',self.theta,
-                  'torch.pow(Variable(e_times)+1e-5, self.theta)',torch.pow(Variable(e_times)+1e-5, self.theta),
+                  'torch.pow(Variable(e_times)+1e-5, self.theta)',torch.pow(Variable(e_times).to(device)+1e-5, self.theta),
                   'self.zeta',self.zeta, 'self.gamma',self.gamma,
-                  'torch.pow(Variable(node_sum-1), self.gamma)', torch.pow(Variable(node_sum-1), self.gamma)
+                  'torch.pow(Variable(node_sum-1), self.gamma)', torch.pow(Variable(node_sum-1).to(device), self.gamma)
                   )
             assert(not torch.isnan(delta_e_pred).any())
         return delta_e_pred
@@ -349,7 +349,7 @@ class MMDNE(nn.Module):
         if torch.isnan(loss):
             print('delta_e_pred',delta_e_pred, 'delta_e_true',delta_e_true,
                   'torch.log(delta_e_pred + 1e-5)',torch.log(delta_e_pred + 1e-5),
-                  'torch.log(Variable(delta_e_true) + 1e-5)',torch.log(Variable(delta_e_true) + 1e-5),
+                  'torch.log(Variable(delta_e_true) + 1e-5)',torch.log(Variable(delta_e_true).to(device) + 1e-5),
                   'loss',loss)
             assert (not torch.isnan(loss))
         return loss
