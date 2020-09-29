@@ -377,7 +377,7 @@ class MMDNE(nn.Module):
 
         criterion = torch.nn.CrossEntropyLoss()
         label = self.labels[news_id]
-        y = torch.tensor(to_label(label))
+        y = torch.tensor(to_label(label)).to(device)
         vera_loss = criterion(output, y)
         return vera_loss
 
