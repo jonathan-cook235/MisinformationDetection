@@ -89,7 +89,7 @@ class MMDNE(nn.Module):
                  emb_size=32, neg_size=10, hist_len=2, directed=False,
                  batch_size=1000, epoch_num=1,
                  only_binary=True,seed=64, backprop_every = 10,
-                 tlp_flag=False, trend_prediction=False,device='cpu',
+                 tlp_flag=False, trend_prediction=False,
                  epsilon=1.0, epsilon1=1.0,epsilon2=1.0, dropout=0.1
     ):
         super(MMDNE, self).__init__()
@@ -105,7 +105,6 @@ class MMDNE(nn.Module):
         self.model_name = model_name
         self.save_model_path = save_model_path
         self.backprop_every = backprop_every
-        self.device = device
 
         self.seed = seed
         self.dropout = dropout
@@ -197,7 +196,7 @@ class MMDNE(nn.Module):
                 tweet_fts=tweet_fts.view(batch_size, dim_size, -1)
 
         # node_fts = user_fts
-        node_fts = torch.cat([user_fts, tweet_fts], dim=-1).to(self.device)
+        node_fts = torch.cat([user_fts, tweet_fts], dim=-1).to(device)
         node_emb = self.fts2emb(node_fts)  # (bach, emb_dim)
         return node_emb
 
@@ -313,7 +312,7 @@ class MMDNE(nn.Module):
         beta = torch.sigmoid(self.bilinear(s_node_emb, t_node_emb)).squeeze(-1) # (batch) Equation-11 torch.sigmoid
         r_t = beta / torch.pow(Variable(e_times).to(device)+1e-5, self.theta)
         # delta_e_pred cannot be  negative
-        delta_e_pred = torch.relu( r_t * Variable(node_sum) * (self.zeta * torch.pow(Variable(node_sum-1).to(device), self.gamma))) # Equation-10
+        delta_e_pred = torch.relu( r_t * Variable(node_sum).to(device) * (self.zeta * torch.pow(Variable(node_sum-1).to(device), self.gamma))) # Equation-10
 
         if torch.isnan(delta_e_pred).any():
             print('beta',beta,'e_times',e_times,'self.theta',self.theta,
@@ -652,8 +651,7 @@ if __name__ == '__main__':
                   epsilon1=args.epsilon1,
                   epsilon2=args.epsilon2,
                   epsilon=args.epsilon,
-                  backprop_every = args.backprop_every,
-                  device = device).to(device)
+                  backprop_every = args.backprop_every).to(device)
 
     if args.optimizer == 'SGD':
         optim = SGD(lr=args.learning_rate, momentum=0.9, weight_decay=0.01, params=mmdne.para_to_opt)
