@@ -476,10 +476,10 @@ def train_func(mmdne, optim):
                       'avg global loss = {:.5f}, '
                       'avg veracity loss = {:.5f} '
                       'of {} datapoints\n'.format(epoch, graph_batch, news_id,
-                                                  graph_batch_loss.detach().numpy() / total_num_datapoints,
-                                                  graph_batch_local_loss.detach().numpy() / total_num_datapoints,
-                                                  graph_batch_global_loss.detach().numpy() / total_num_datapoints,
-                                                  graph_batch_vera_loss.detach().numpy() / total_num_datapoints,
+                                                  graph_batch_loss.detach().cpu().numpy() / total_num_datapoints,
+                                                  graph_batch_local_loss.detach().cpu().numpy() / total_num_datapoints,
+                                                  graph_batch_global_loss.detach().cpu().numpy() / total_num_datapoints,
+                                                  graph_batch_vera_loss.detach().cpu().numpy() / total_num_datapoints,
                                                   total_num_datapoints))
 
                 graph_batch_loss = 0
@@ -603,10 +603,10 @@ def eval_temporal_pred(mmdne, news_id_consider):
                                 news_id
                                 )
 
-                total_loss += batch_loss.detach().numpy()
-                total_local_loss += batch_local_loss.detach().numpy()
-                total_global_loss += batch_global_loss.detach().numpy()
-                total_vera_loss += batch_vera_loss.detach().numpy()
+                total_loss += batch_loss.detach().cpu().numpy()
+                total_local_loss += batch_local_loss.detach().cpu().numpy()
+                total_global_loss += batch_global_loss.detach().cpu().numpy()
+                total_vera_loss += batch_vera_loss.detach().cpu().numpy()
 
     return total_loss, total_local_loss, total_global_loss, total_vera_loss, total_num_datapoints
 
