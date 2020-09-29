@@ -41,7 +41,7 @@ parser.add_argument('--oversampling_ratio', default=1, type=int,
                     help='Oversampling ratio for data augmentation')
 # parser.add_argument('--dropout', default=0.0, type=float,
 #                 help='dropout for TGS_stack')
-parser.add_argument('--batch_size', default=32, type=int,
+parser.add_argument('--batch_size', default=512, type=int,
                     help='Batch_size')
 parser.add_argument('--emb_size', default=64, type=int,
                     help='embedding_size')
