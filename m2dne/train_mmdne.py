@@ -60,7 +60,7 @@ parser.add_argument('--epsilon2', type=float, default=0.1, help='global loss co-
 parser.add_argument('--enable_cuda', type=bool, default=True,
                     help='whether to use gpu')
 parser.add_argument('--gpu', type=int, default=1, help='Idx for the gpu to use')
-parser.add_argument('--backprop_every', type=int, default=20,
+parser.add_argument('--backprop_every', type=int, default=5,
                     help='Every how many batches to backprop')
 args = parser.parse_args()
 print(args)
