@@ -410,11 +410,11 @@ class MMDNE(nn.Module):
         vera_loss = self.veracity_loss(news_id)
 
         weighted_local_loss = self.epsilon1 * local_loss.sum()
-        # weighted_global_loss = weighted_local_loss
-        weighted_global_loss = self.epsilon2 * global_loss.sum()
+        weighted_global_loss = weighted_local_loss
+        # weighted_global_loss = self.epsilon2 * global_loss.sum()
         weighted_vera_loss = self.epsilon * vera_loss
 
-        loss = weighted_local_loss + weighted_vera_loss + weighted_global_loss
+        loss = weighted_local_loss + weighted_vera_loss #+ weighted_global_loss
 
         return loss, weighted_local_loss, weighted_global_loss, weighted_vera_loss
 
@@ -428,7 +428,7 @@ def forward_per_graph(news_id):
 
     graph_data = mmdne.graph_data_dict[news_id]
     num_datapoints = len(graph_data)
-    loader = DataLoader(graph_data, batch_size=num_datapoints, shuffle=True, num_workers=0)#10
+    loader = DataLoader(graph_data, batch_size=num_datapoints, shuffle=True, num_workers=10)
 
     for iii, sample_batched in enumerate(loader):
         # str
