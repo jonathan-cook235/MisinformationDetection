@@ -30,7 +30,7 @@ parser.add_argument('--dataset', choices=["twitter15", "twitter16"],
                     help='Training dataset', default="twitter15")
 parser.add_argument('--optimizer', choices=["Adam", "SGD"],
                     help='optimizer', default="Adam")
-parser.add_argument('--learning_rate', default=1e-3, type=float,
+parser.add_argument('--learning_rate', default=1e-2, type=float,
                     help='learning rate')
 parser.add_argument('--epoch_num', default=1000, type=int,
                     help='Number of epochs')
@@ -60,7 +60,7 @@ parser.add_argument('--epsilon2', type=float, default=0.1, help='global loss co-
 parser.add_argument('--enable_cuda', type=bool, default=False,
                     help='whether to use gpu')
 parser.add_argument('--gpu', type=int, default=1, help='Idx for the gpu to use')
-parser.add_argument('--backprop_every', type=int, default=10,
+parser.add_argument('--backprop_every', type=int, default=50,
                     help='Every how many batches to backprop')
 args = parser.parse_args()
 print(args)

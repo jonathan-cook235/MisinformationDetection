@@ -259,6 +259,7 @@ class MMDNE(nn.Module):
         if torch.isnan(delta_e_pred).any():
             print('beta',beta,'e_times',e_times,'self.theta',self.theta,
                   'torch.pow(Variable(e_times)+1e-5, self.theta)',torch.pow(Variable(e_times).to(self.device)+1e-5, self.theta),
+                  'node_sum',node_sum,
                   'self.zeta',self.zeta, 'self.gamma',self.gamma,
                   'torch.pow(Variable(node_sum-1), self.gamma)', torch.pow(Variable(node_sum-1).to(self.device), self.gamma)
                   )
@@ -346,10 +347,10 @@ class MMDNE(nn.Module):
         vera_loss = self.veracity_loss(news_id)
 
         weighted_local_loss = self.epsilon1 * local_loss.mean()
-        weighted_global_loss = weighted_local_loss
-        # weighted_global_loss = self.epsilon2 * global_loss.mean()
+        # weighted_global_loss = weighted_local_loss
+        weighted_global_loss = self.epsilon2 * global_loss.mean()
         weighted_vera_loss = self.epsilon * vera_loss
 
-        loss = weighted_local_loss + weighted_vera_loss #+ weighted_global_loss
+        loss = weighted_local_loss + weighted_vera_loss + weighted_global_loss
 
         return loss, weighted_local_loss, weighted_global_loss, weighted_vera_loss
