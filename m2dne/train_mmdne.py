@@ -65,9 +65,9 @@ parser.add_argument('--backprop_every', type=int, default=10,
 args = parser.parse_args()
 print(args)
 
-# USE_GPU = args.enable_cuda and torch.cuda.is_available()
+USE_GPU = args.enable_cuda and torch.cuda.is_available()
 
-device_string = 'cuda:{}'.format(args.gpu) if torch.cuda.is_available() else 'cpu'
+device_string = 'cuda:{}'.format(args.gpu) if USE_GPU else 'cpu'
 device = torch.device(device_string)
 
 model_name = 'MMDNE_'+ args.dataset
