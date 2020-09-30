@@ -260,10 +260,10 @@ class MMDNE(nn.Module):
 
         if torch.isnan(delta_e_pred).any():
             print('beta',beta,'e_times',e_times,'self.theta',self.theta,
-                  'torch.pow(Variable(e_times)+1e-5, self.theta)',torch.pow(Variable(e_times).to(self.device)+1e-5, self.theta),
+                  'torch.pow(e_times, self.theta)',torch.pow(e_times, self.theta),
                   'node_sum',node_sum,
                   'self.zeta',self.zeta, 'self.gamma',self.gamma,
-                  'torch.pow(Variable(node_sum-1), self.gamma)', torch.pow(Variable(node_sum-1).to(self.device), self.gamma)
+                  'torch.pow(node_sum-1).abs(), self.gamma)', torch.pow((node_sum-1).abs(), self.gamma)
                   )
             # assert(not torch.isnan(delta_e_pred).any())
         return delta_e_pred
