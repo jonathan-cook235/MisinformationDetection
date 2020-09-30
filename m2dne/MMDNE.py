@@ -613,38 +613,6 @@ def eval_temporal_pred(mmdne, news_id_consider):
             total_graph_vera_loss += graph_vera_loss.detach().cpu().numpy()
             total_num_datapoints += num_datapoints
 
-
-            # graph_data = mmdne.graph_data_dict[news_id]
-            # single_num_datapoints = len(graph_data)
-            # total_num_datapoints += single_num_datapoints
-            #
-            # loader = DataLoader(graph_data, batch_size=single_num_datapoints, shuffle=True, num_workers=10)
-            # for _, sample_batched in enumerate(loader):
-            #     # str
-            #     batch_loss, batch_local_loss, batch_global_loss, batch_vera_loss = \
-            #         mmdne.update(sample_batched['source_node'],
-            #                     sample_batched['target_node'],
-            #                     sample_batched['event_time'].type(FType),
-            #                     sample_batched['s_history_nodes'],
-            #                     sample_batched['s_history_times'].type(FType),
-            #                     sample_batched['s_history_masks'].type(FType),
-            #                     sample_batched['t_history_nodes'],
-            #                     sample_batched['t_history_times'].type(FType),
-            #                     sample_batched['t_history_masks'].type(FType),
-            #                     sample_batched['neg_s_nodes'],
-            #                     sample_batched['neg_t_nodes'],
-            #                     sample_batched['delta_e_true'].type(FType),
-            #                     # sample_batched['delta_n_true'].type(FType),
-            #                     sample_batched['node_sum'].type(FType),
-            #                     # sample_batched['edge_last_time_sum'].type(FType),
-            #                     news_id
-            #                     )
-            #
-            #     total_loss += batch_loss.detach().cpu().numpy()
-            #     total_local_loss += batch_local_loss.detach().cpu().numpy()
-            #     total_global_loss += batch_global_loss.detach().cpu().numpy()
-            #     total_vera_loss += batch_vera_loss.detach().cpu().numpy()
-
     return total_graph_loss, total_graph_local_loss, total_graph_global_loss, total_graph_vera_loss, total_num_datapoints
 
 
