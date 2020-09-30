@@ -30,7 +30,7 @@ parser.add_argument('--dataset', choices=["twitter15", "twitter16"],
                     help='Training dataset', default="twitter15")
 parser.add_argument('--optimizer', choices=["Adam", "SGD"],
                     help='optimizer', default="Adam")
-parser.add_argument('--learning_rate', default=1e-2, type=float,
+parser.add_argument('--learning_rate', default=1e-3, type=float,
                     help='learning rate')
 parser.add_argument('--epoch_num', default=1000, type=int,
                     help='Number of epochs')
