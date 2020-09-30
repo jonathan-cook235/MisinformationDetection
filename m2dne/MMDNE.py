@@ -63,13 +63,13 @@ parser.add_argument('--seed', default=64, type=int,
                     help='Seed for train/val/test split')
 parser.add_argument('--patience', type=int, default=5, help='Patience for early stopping')
 parser.add_argument('--dropout', type=float, default=0.1, help='Dropout probability')
-parser.add_argument('--epsilon', type=float, default=1000, help='veracity loss co-efficient')
+parser.add_argument('--epsilon', type=float, default=10, help='veracity loss co-efficient')
 parser.add_argument('--epsilon1', type=float, default=1, help='local loss co-efficient')
 parser.add_argument('--epsilon2', type=float, default=1, help='global loss co-efficient')
 parser.add_argument('--enable_cuda', type=bool, default=True,
                     help='whether to use gpu')
 parser.add_argument('--gpu', type=int, default=1, help='Idx for the gpu to use')
-parser.add_argument('--backprop_every', type=int, default=32,
+parser.add_argument('--backprop_every', type=int, default=10,
                     help='Every how many batches to backprop')
 args = parser.parse_args()
 print(args)
@@ -409,9 +409,9 @@ class MMDNE(nn.Module):
                                       delta_e_true, node_sum,news_id)
         vera_loss = self.veracity_loss(news_id)
 
-        weighted_local_loss = self.epsilon1 * local_loss.sum()
+        weighted_local_loss = self.epsilon1 * local_loss.mean()
         weighted_global_loss = weighted_local_loss
-        # weighted_global_loss = self.epsilon2 * global_loss.sum()
+        # weighted_global_loss = self.epsilon2 * global_loss.mean()
         weighted_vera_loss = self.epsilon * vera_loss
 
         loss = weighted_local_loss + weighted_vera_loss #+ weighted_global_loss
@@ -502,17 +502,15 @@ def train_func(mmdne, optim):
                       'avg loss = {:.5f}, '
                       'avg local loss = {:.5f}, '
                       'avg global loss = {:.5f}, '
-                      'avg veracity loss = {:.5f} '
-                      'of {} datapoints\n'.format(epoch, graph_num,
-                                                  total_graph_loss.detach().cpu().numpy() / total_num_datapoints,
-                                                  total_graph_local_loss.detach().cpu().numpy() / total_num_datapoints,
-                                                  total_graph_global_loss.detach().cpu().numpy() / total_num_datapoints,
-                                                  total_graph_vera_loss.detach().cpu().numpy() / total_num_datapoints,
-                                                  total_num_datapoints))
+                      'avg veracity loss = {:.5f}'.format(epoch, graph_num,
+                                                  total_graph_loss.detach().cpu().numpy() / mmdne.backprop_every,
+                                                  total_graph_local_loss.detach().cpu().numpy() / mmdne.backprop_every,
+                                                  total_graph_global_loss.detach().cpu().numpy() / mmdne.backprop_every,
+                                                  total_graph_vera_loss.detach().cpu().numpy() / mmdne.backprop_every))
 
                 total_graph_loss = 0
                 total_graph_local_loss = 0
-                total_graph_gocal_loss = 0
+                total_graph_global_loss = 0
                 total_graph_vera_loss = 0
                 total_num_datapoints = 0
 
@@ -525,37 +523,37 @@ def train_func(mmdne, optim):
             print('\tValdation: avg loss = {:.5f}, '
                   'avg local loss = {:.5f}, '
                   'avg global loss = {:.5f}, '
-                  'avg veracity loss = {:.5f}\n'.format(val_loss / val_num_datapoints,
-                                                        val_local_loss / val_num_datapoints,
-                                                        val_global_loss / val_num_datapoints,
-                                                        val_vera_loss / val_num_datapoints))
+                  'avg veracity loss = {:.5f}\n'.format(val_loss / len(mmdne.val_ids),
+                                                        val_local_loss / len(mmdne.val_ids),
+                                                        val_global_loss / len(mmdne.val_ids),
+                                                        val_vera_loss / len(mmdne.val_ids)))
 
             test_loss, test_local_loss, test_global_loss, test_vera_loss, test_num_datapoints = \
                 eval_temporal_pred(mmdne, mmdne.test_ids)
             print('\tTest: avg loss = {:.5f}, '
                   'avg local loss = {:.5f}, '
                   'avg global loss = {:.5f}, '
-                  'avg veracity loss = {:.5f}\n'.format(test_loss / test_num_datapoints,
-                                                        test_local_loss / test_num_datapoints,
-                                                        test_global_loss / test_num_datapoints,
-                                                        test_vera_loss / test_num_datapoints))
+                  'avg veracity loss = {:.5f}\n'.format(test_loss / len(mmdne.test_ids),
+                                                        test_local_loss / len(mmdne.test_ids),
+                                                        test_global_loss / len(mmdne.test_ids),
+                                                        test_vera_loss / len(mmdne.test_ids)))
 
             # Evaluate veracity classification
-            train_acc, train_correct, train_n_samples = eval_veracity_func(mmdne, mmdne.train_ids)
-            print('--train accuracy: {:.5f}, correct {} out of {}'.format(train_acc, train_correct, train_n_samples))
+            train_acc, train_correct, train_n_graphs = eval_veracity_func(mmdne, mmdne.train_ids)
+            print('--train accuracy: {:.5f}, correct {} out of {}'.format(train_acc, train_correct, train_n_graphs))
 
-            val_acc, val_correct, val_n_samples = eval_veracity_func(mmdne, mmdne.val_ids)
-            print('--validation accuracy: {:.5f}, correct {} out of {}'.format(val_acc, val_correct, val_n_samples))
+            val_acc, val_correct, val_n_graphs = eval_veracity_func(mmdne, mmdne.val_ids)
+            print('--validation accuracy: {:.5f}, correct {} out of {}'.format(val_acc, val_correct, val_n_graphs))
 
-            test_acc, test_correct, test_n_samples = eval_veracity_func(mmdne, mmdne.test_ids)
-            print('--test accuracy: {:.5f}, correct {} out of {}\n'.format(test_acc, test_correct, test_n_samples))
+            test_acc, test_correct, test_n_graphs = eval_veracity_func(mmdne, mmdne.test_ids)
+            print('--test accuracy: {:.5f}, correct {} out of {}\n'.format(test_acc, test_correct, test_n_graphs))
 
             print('#############################################')
 
 def eval_veracity_func(mmdne, news_id_consider):
 
     correct = 0
-    n_samples = len(news_id_consider)
+    n_graphs = len(news_id_consider)
     samples_per_label = np.zeros(mmdne.output_dim)
     pred_per_label = np.zeros(mmdne.output_dim)
     correct_per_label = np.zeros(mmdne.output_dim)
@@ -573,18 +571,18 @@ def eval_veracity_func(mmdne, news_id_consider):
             y = torch.tensor(to_label(label)).to(device)
             correct += float(pred.eq(y).sum().item())
 
-            ## buggy
-            for i in range(mmdne.output_dim):
-                batch_i = y[i]
-                pred_i = pred.eq(i)
-                samples_per_label[i] += batch_i.sum().item()
-                pred_per_label[i] += pred_i.sum().item()
-                correct_per_label[i] += (batch_i * pred_i).sum().item()
+            # ## buggy
+            # for i in range(mmdne.output_dim):
+            #     batch_i = y[i]
+            #     pred_i = pred.eq(i)
+            #     samples_per_label[i] += batch_i.sum().item()
+            #     pred_per_label[i] += pred_i.sum().item()
+            #     correct_per_label[i] += (batch_i * pred_i).sum().item()
 
-    print('correct',correct)
-    print('n_samples',n_samples)
+    # print('correct',correct)
+    # print('n_graphs',n_graphs)
 
-    acc = correct / n_samples
+    acc = correct / n_graphs
 
     # acc_per_label = correct_per_label / samples_per_label
     # rec_per_label = correct_per_label / pred_per_label
@@ -592,7 +590,7 @@ def eval_veracity_func(mmdne, news_id_consider):
     #     print("Accuracy_{}".format(i), acc_per_label[i])
     #     print("Recall_{}".format(i), rec_per_label[i])
 
-    return  acc, correct, n_samples
+    return  acc, correct, n_graphs
 
 def eval_temporal_pred(mmdne, news_id_consider):
     news_id_list = list(mmdne.graph_data_dict.keys())
