@@ -264,7 +264,7 @@ class MMDNE(nn.Module):
                   'self.zeta',self.zeta, 'self.gamma',self.gamma,
                   'torch.pow(Variable(node_sum-1), self.gamma)', torch.pow(Variable(node_sum-1).to(self.device), self.gamma)
                   )
-            assert(not torch.isnan(delta_e_pred).any())
+            # assert(not torch.isnan(delta_e_pred).any())
         return delta_e_pred
 
     def local_loss(self, s_nodes, t_nodes, e_times,
