@@ -256,14 +256,14 @@ class MMDNE(nn.Module):
         e_times = Variable(e_times).abs().to(self.device)+1e-5
         r_t = beta / torch.pow(e_times, self.theta)
         node_sum = Variable(node_sum).abs().to(self.device)
-        delta_e_pred = ( r_t * node_sum * (self.zeta * torch.pow((node_sum-1).abs(), self.gamma))) # Equation-10
+        delta_e_pred = ( r_t * node_sum * (self.zeta * torch.pow(node_sum, self.gamma))) # Equation-10
 
         if torch.isnan(delta_e_pred).any():
             print('beta',beta,'e_times',e_times,'self.theta',self.theta,
                   'torch.pow(e_times, self.theta)',torch.pow(e_times, self.theta),
                   'node_sum',node_sum,
                   'self.zeta',self.zeta, 'self.gamma',self.gamma,
-                  'torch.pow(node_sum-1).abs(), self.gamma)', torch.pow((node_sum-1).abs(), self.gamma)
+                  'torch.pow(node_sum, self.gamma)', torch.pow(node_sum, self.gamma)
                   )
             # assert(not torch.isnan(delta_e_pred).any())
         return delta_e_pred
