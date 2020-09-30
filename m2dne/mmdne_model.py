@@ -70,7 +70,7 @@ class MMDNE(nn.Module):
                            only_binary, seed, tlp_flag, trend_prediction)
 
         ## initialize model trainable parameters
-        if 'cpu' not in self.device:
+        if 'cpu' not in self.device.type:
         # ??? single delta value for all nodes
             self.delta_s = Variable((torch.ones(1)).type(FType).cuda(self.gpu), requires_grad=True)
             self.delta_t = Variable((torch.ones(1)).type(FType).cuda(self.gpu), requires_grad=True)
