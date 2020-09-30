@@ -69,6 +69,7 @@ USE_GPU = args.enable_cuda and torch.cuda.is_available()
 
 device_string = 'cuda:{}'.format(args.gpu) if USE_GPU else 'cpu'
 device = torch.device(device_string)
+print('Running model on device: ', device)
 
 model_name = 'MMDNE_'+ args.dataset
 data_file_path = '../rumor_detection_acl2017/' + args.dataset
