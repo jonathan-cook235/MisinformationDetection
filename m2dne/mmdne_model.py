@@ -248,6 +248,7 @@ class MMDNE(nn.Module):
         return p_lambda, n_lambda_s#, n_lambda_t  # max p_lambda, min n_lambda
 
     def global_forward(self, s_nodes, t_nodes, e_times, node_sum,news_id):
+        print('self.theta',self.theta, 'self.zeta',self.zeta, 'self.gamma',self.gamma,)
         s_node_emb = self.get_emb_from_id(s_nodes,news_id,dim_num=2)
         t_node_emb = self.get_emb_from_id(t_nodes,news_id,dim_num=2)
 
