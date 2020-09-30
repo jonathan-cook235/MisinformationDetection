@@ -22,6 +22,8 @@ from process_data import create_dataset, to_label
 from torch import autograd
 import pickle
 import random
+from multiprocessing import Pool
+import torch.multiprocessing as mp
 
 
 FType = torch.FloatTensor
@@ -61,16 +63,20 @@ parser.add_argument('--seed', default=64, type=int,
                     help='Seed for train/val/test split')
 parser.add_argument('--patience', type=int, default=5, help='Patience for early stopping')
 parser.add_argument('--dropout', type=float, default=0.1, help='Dropout probability')
-parser.add_argument('--epsilon', type=float, default=10, help='veracity loss co-efficient')
+parser.add_argument('--epsilon', type=float, default=1000, help='veracity loss co-efficient')
 parser.add_argument('--epsilon1', type=float, default=1, help='local loss co-efficient')
 parser.add_argument('--epsilon2', type=float, default=1, help='global loss co-efficient')
+parser.add_argument('--enable_cuda', type=bool, default=True,
+                    help='whether to use gpu')
 parser.add_argument('--gpu', type=int, default=1, help='Idx for the gpu to use')
-parser.add_argument('--backprop_every', type=int, default=10, help='Every how many batches to '
-                                                                  'backprop')
+parser.add_argument('--backprop_every', type=int, default=32,
+                    help='Every how many batches to backprop')
 args = parser.parse_args()
 print(args)
 
-device_string = 'cuda:{}'.format(args.gpu) if torch.cuda.is_available() else 'cpu'
+USE_GPU = args.enable_cuda and torch.cuda.is_available()
+
+device_string = 'cuda:{}'.format(args.gpu) if USE_GPU else 'cpu'
 device = torch.device(device_string)
 
 model_name = 'MMDNE_'+ args.dataset
@@ -128,7 +134,7 @@ class MMDNE(nn.Module):
                            only_binary, seed, tlp_flag, trend_prediction)
 
         ## initialize model trainable parameters
-        if torch.cuda.is_available():
+        if USE_GPU:
         # ??? single delta value for all nodes
             self.delta_s = Variable((torch.ones(1)).type(FType).cuda(args.gpu), requires_grad=True)
             self.delta_t = Variable((torch.ones(1)).type(FType).cuda(args.gpu), requires_grad=True)
@@ -412,80 +418,102 @@ class MMDNE(nn.Module):
 
         return loss, weighted_local_loss, weighted_global_loss, weighted_vera_loss
 
+
+def forward_per_graph(news_id):
+    # graph_batch_num = 0
+    graph_loss = 0
+    graph_local_loss = 0
+    graph_global_loss = 0
+    graph_vera_loss = 0
+
+    graph_data = mmdne.graph_data_dict[news_id]
+    num_datapoints = len(graph_data)
+    loader = DataLoader(graph_data, batch_size=num_datapoints, shuffle=True, num_workers=0)#10
+
+    for iii, sample_batched in enumerate(loader):
+        # str
+        # print(iii)
+        optim.zero_grad()
+        batch_loss, batch_local_loss, batch_global_loss, batch_vera_loss = \
+            mmdne.update(sample_batched['source_node'],
+                         sample_batched['target_node'],
+                         sample_batched['event_time'].type(FType),
+                         sample_batched['s_history_nodes'],
+                         sample_batched['s_history_times'].type(FType),
+                         sample_batched['s_history_masks'].type(FType),
+                         sample_batched['t_history_nodes'],
+                         sample_batched['t_history_times'].type(FType),
+                         sample_batched['t_history_masks'].type(FType),
+                         sample_batched['neg_s_nodes'],
+                         sample_batched['neg_t_nodes'],
+                         sample_batched['delta_e_true'].type(FType),
+                         # sample_batched['delta_n_true'].type(FType),
+                         sample_batched['node_sum'].type(FType),
+                         # sample_batched['edge_last_time_sum'].type(FType),
+                         news_id
+                         )
+        # batch_loss.backward()
+        # mmdne.opt.step()
+
+        graph_loss += batch_loss
+        graph_local_loss += batch_local_loss
+        graph_global_loss += batch_global_loss
+        graph_vera_loss += batch_vera_loss
+
+    return graph_loss, graph_local_loss, graph_global_loss, graph_vera_loss, num_datapoints
+
 def train_func(mmdne, optim):
-    graph_batch = 0
-    graph_batch_loss = 0
-    graph_batch_local_loss = 0
-    graph_batch_global_loss = 0
-    graph_batch_vera_loss = 0
+    total_graph_loss = 0
+    total_graph_local_loss = 0
+    total_graph_global_loss = 0
+    total_graph_vera_loss = 0
     total_num_datapoints = 0
 
     news_id_list = list(mmdne.graph_data_dict.keys())
+    train_news_id_list = [news_id for news_id in news_id_list if news_id in mmdne.train_ids]
+
     print('training...')
+    graph_num = 0
+    # with mp.Pool(os.cpu_count()) as pool:
+    # Unsupported: autograd does not support crossing process boundaries
     for epoch in range(mmdne.epochs):
         mmdne.train()
-        random.shuffle(news_id_list)
-        for num, news_id in enumerate(news_id_list):
-            if news_id not in mmdne.train_ids:
-                continue
-            # print('news_id: ',news_id)
-            ## for each graph
-            graph_batch += 1
-            graph_data = mmdne.graph_data_dict[news_id]
-            total_num_datapoints += len(graph_data)
-            loader = DataLoader(graph_data, batch_size=mmdne.batch_size, shuffle=True, num_workers=10)
+        random.shuffle(train_news_id_list)
+        for num, news_id in enumerate(train_news_id_list):
+            # batch_news_id_list = train_news_id_list[num*args.backprop_every:(num+1)*args.backprop_every]
+            # graph_batch_loss, graph_batch_local_loss, graph_batch_global_loss, graph_batch_vera_loss = \
+            #     pool.map(forward_per_graph, batch_news_id_list)
+            graph_num += 1
+            graph_loss, graph_local_loss, graph_global_loss, graph_vera_loss, num_datapoints = \
+                forward_per_graph(news_id)
 
-            for _, sample_batched in enumerate(loader):
-                #str
-                optim.zero_grad()
-                batch_loss, batch_local_loss, batch_global_loss, batch_vera_loss = \
-                    mmdne.update(sample_batched['source_node'],
-                                sample_batched['target_node'],
-                                sample_batched['event_time'].type(FType),
-                                sample_batched['s_history_nodes'],
-                                sample_batched['s_history_times'].type(FType),
-                                sample_batched['s_history_masks'].type(FType),
-                                sample_batched['t_history_nodes'],
-                                sample_batched['t_history_times'].type(FType),
-                                sample_batched['t_history_masks'].type(FType),
-                                sample_batched['neg_s_nodes'],
-                                sample_batched['neg_t_nodes'],
-                                sample_batched['delta_e_true'].type(FType),
-                                # sample_batched['delta_n_true'].type(FType),
-                                sample_batched['node_sum'].type(FType),
-                                # sample_batched['edge_last_time_sum'].type(FType),
-                                news_id
-                                )
-                # batch_loss.backward()
-                # mmdne.opt.step()
+            total_graph_loss += graph_loss
+            total_graph_local_loss += graph_local_loss
+            total_graph_global_loss += graph_global_loss
+            total_graph_vera_loss += graph_vera_loss
+            total_num_datapoints += num_datapoints
 
-                graph_batch_loss += batch_loss
-                graph_batch_local_loss += batch_local_loss
-                graph_batch_global_loss += batch_global_loss
-                graph_batch_vera_loss += batch_vera_loss
-
-            if graph_batch % mmdne.backprop_every == 0: # itrate 10 grahs
+            if graph_num % mmdne.backprop_every == 0: # itrate 10 grahs
                 # back-propagation
-                graph_batch_loss.backward()
+                total_graph_loss.backward()
                 optim.step()
 
-                # if num %10 == 0:
-                print('epoch-{} graph_batch-{} news_id-{} : '
+                print('epoch-{} graph_batch_num-{}: '
                       'avg loss = {:.5f}, '
                       'avg local loss = {:.5f}, '
                       'avg global loss = {:.5f}, '
                       'avg veracity loss = {:.5f} '
-                      'of {} datapoints\n'.format(epoch, graph_batch, news_id,
-                                                  graph_batch_loss.detach().cpu().numpy() / total_num_datapoints,
-                                                  graph_batch_local_loss.detach().cpu().numpy() / total_num_datapoints,
-                                                  graph_batch_global_loss.detach().cpu().numpy() / total_num_datapoints,
-                                                  graph_batch_vera_loss.detach().cpu().numpy() / total_num_datapoints,
+                      'of {} datapoints\n'.format(epoch, graph_num,
+                                                  total_graph_loss.detach().cpu().numpy() / total_num_datapoints,
+                                                  total_graph_local_loss.detach().cpu().numpy() / total_num_datapoints,
+                                                  total_graph_global_loss.detach().cpu().numpy() / total_num_datapoints,
+                                                  total_graph_vera_loss.detach().cpu().numpy() / total_num_datapoints,
                                                   total_num_datapoints))
 
-                graph_batch_loss = 0
-                graph_batch_local_loss = 0
-                graph_batch_global_loss = 0
-                graph_batch_vera_loss = 0
+                total_graph_loss = 0
+                total_graph_local_loss = 0
+                total_graph_gocal_loss = 0
+                total_graph_vera_loss = 0
                 total_num_datapoints = 0
 
         if epoch % 1 == 0:# and epoch != 0:
@@ -544,15 +572,15 @@ def eval_veracity_func(mmdne, news_id_consider):
             correct += float(pred.eq(y).sum().item())
 
             ## buggy
-            # for i in range(mmdne.output_dim):
-            #     batch_i = y[i]
-            #     pred_i = pred.eq(i)
-            #     samples_per_label[i] += batch_i.sum().item()
-            #     pred_per_label[i] += pred_i.sum().item()
-            #     correct_per_label[i] += (batch_i * pred_i).sum().item()
+            for i in range(mmdne.output_dim):
+                batch_i = y[i]
+                pred_i = pred.eq(i)
+                samples_per_label[i] += batch_i.sum().item()
+                pred_per_label[i] += pred_i.sum().item()
+                correct_per_label[i] += (batch_i * pred_i).sum().item()
 
-    # print('correct',correct)
-    # print('n_samples',n_samples)
+    print('correct',correct)
+    print('n_samples',n_samples)
 
     acc = correct / n_samples
 
@@ -566,76 +594,63 @@ def eval_veracity_func(mmdne, news_id_consider):
 
 def eval_temporal_pred(mmdne, news_id_consider):
     news_id_list = list(mmdne.graph_data_dict.keys())
+    eval_news_id_list = [news_id for news_id in news_id_list if news_id in news_id_consider]
 
-    total_loss = 0
-    total_local_loss = 0
-    total_global_loss = 0
-    total_vera_loss = 0
+    total_graph_loss = 0
+    total_graph_local_loss = 0
+    total_graph_global_loss = 0
+    total_graph_vera_loss = 0
     total_num_datapoints = 0
 
     with torch.no_grad():
-        for _, news_id in enumerate(news_id_list):
-            if news_id not in news_id_consider:
-                continue
+        for _, news_id in enumerate(eval_news_id_list):
+            graph_loss, graph_local_loss, graph_global_loss, graph_vera_loss, num_datapoints = \
+                forward_per_graph(news_id)
 
-            graph_data = mmdne.graph_data_dict[news_id]
-            total_num_datapoints += len(graph_data)
+            total_graph_loss += graph_loss.detach().cpu().numpy()
+            total_graph_local_loss += graph_local_loss.detach().cpu().numpy()
+            total_graph_global_loss += graph_global_loss.detach().cpu().numpy()
+            total_graph_vera_loss += graph_vera_loss.detach().cpu().numpy()
+            total_num_datapoints += num_datapoints
 
-            loader = DataLoader(graph_data, batch_size=1000, shuffle=True, num_workers=10)
-            for _, sample_batched in enumerate(loader):
-                # str
-                batch_loss, batch_local_loss, batch_global_loss, batch_vera_loss = \
-                    mmdne.update(sample_batched['source_node'],
-                                sample_batched['target_node'],
-                                sample_batched['event_time'].type(FType),
-                                sample_batched['s_history_nodes'],
-                                sample_batched['s_history_times'].type(FType),
-                                sample_batched['s_history_masks'].type(FType),
-                                sample_batched['t_history_nodes'],
-                                sample_batched['t_history_times'].type(FType),
-                                sample_batched['t_history_masks'].type(FType),
-                                sample_batched['neg_s_nodes'],
-                                sample_batched['neg_t_nodes'],
-                                sample_batched['delta_e_true'].type(FType),
-                                # sample_batched['delta_n_true'].type(FType),
-                                sample_batched['node_sum'].type(FType),
-                                # sample_batched['edge_last_time_sum'].type(FType),
-                                news_id
-                                )
 
-                total_loss += batch_loss.detach().cpu().numpy()
-                total_local_loss += batch_local_loss.detach().cpu().numpy()
-                total_global_loss += batch_global_loss.detach().cpu().numpy()
-                total_vera_loss += batch_vera_loss.detach().cpu().numpy()
+            # graph_data = mmdne.graph_data_dict[news_id]
+            # single_num_datapoints = len(graph_data)
+            # total_num_datapoints += single_num_datapoints
+            #
+            # loader = DataLoader(graph_data, batch_size=single_num_datapoints, shuffle=True, num_workers=10)
+            # for _, sample_batched in enumerate(loader):
+            #     # str
+            #     batch_loss, batch_local_loss, batch_global_loss, batch_vera_loss = \
+            #         mmdne.update(sample_batched['source_node'],
+            #                     sample_batched['target_node'],
+            #                     sample_batched['event_time'].type(FType),
+            #                     sample_batched['s_history_nodes'],
+            #                     sample_batched['s_history_times'].type(FType),
+            #                     sample_batched['s_history_masks'].type(FType),
+            #                     sample_batched['t_history_nodes'],
+            #                     sample_batched['t_history_times'].type(FType),
+            #                     sample_batched['t_history_masks'].type(FType),
+            #                     sample_batched['neg_s_nodes'],
+            #                     sample_batched['neg_t_nodes'],
+            #                     sample_batched['delta_e_true'].type(FType),
+            #                     # sample_batched['delta_n_true'].type(FType),
+            #                     sample_batched['node_sum'].type(FType),
+            #                     # sample_batched['edge_last_time_sum'].type(FType),
+            #                     news_id
+            #                     )
+            #
+            #     total_loss += batch_loss.detach().cpu().numpy()
+            #     total_local_loss += batch_local_loss.detach().cpu().numpy()
+            #     total_global_loss += batch_global_loss.detach().cpu().numpy()
+            #     total_vera_loss += batch_vera_loss.detach().cpu().numpy()
 
-    return total_loss, total_local_loss, total_global_loss, total_vera_loss, total_num_datapoints
+    return total_graph_loss, total_graph_local_loss, total_graph_global_loss, total_graph_vera_loss, total_num_datapoints
 
 
 if __name__ == '__main__':
     train_mode =  True
     print(time.asctime(time.localtime(time.time())))
-    # parameters_dict = {
-    #     'file_path': '../rumor_detection_acl2017/twitter15/',
-    #     'save_graph_path':'../rumor_detection_acl2017/twitter15/graph_obj/',
-    #     'model_name': 'MMDNE_twitter15',
-    #     'save_model_path': '../checkpoints/twitter15/',
-    #     'epoch_num': 100,#1000
-    #     'batch_size': 32,
-    #     'emb_size': 64,
-    #     # 'gat_hidden_size':32,
-    #     'learning_rate': 1e-4,
-    #     'neg_size': 5,
-    #     'hist_len': 3,
-    #     'directed': False,
-    #     'save_step': 50,
-    #     'optimization': 'Adam',#SGD: NaN in the 247-graph
-    #     'tlp_flag':False,
-    #     'trend_prediction':False,
-    #     'epsilon1': 1, # local loss
-    #     'epsilon2': 1,# global loss
-    #     'epsilon':10}
-    # print ('parameters: \r\n{}'.format(parameters_dict))
-
 
     mmdne = MMDNE(file_path=data_file_path,
                   save_graph_path = save_graph_path,
