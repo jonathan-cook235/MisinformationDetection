@@ -1,11 +1,8 @@
-# coding: utf-8
-# author: lu yf
-# create date: 2018/11/12
-
 from __future__ import division
+import sys
+sys.path.append("../")
 
 import time
-
 import torch
 import torch.nn as nn
 from torch.autograd import Variable
