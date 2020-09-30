@@ -112,7 +112,7 @@ class DataHelper(Dataset):
                 self.node2hist[s_node].append((t_node, d_time))
                 if not directed:
                     # TICK-Check This: if this is directed, we will lose t_node in the self.node2hist
-                    # Can implement direct graphs by removing t-node from local_forward in MMDNE.py (Equation-2)
+                    # Can implement direct graphs by removing t-node from local_forward in train_mmdne.py (Equation-2)
                     if t_node not in self.node2hist:
                         self.node2hist[t_node] = list()
                     self.node2hist[t_node].append((s_node, d_time))
