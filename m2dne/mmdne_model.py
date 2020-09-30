@@ -253,9 +253,10 @@ class MMDNE(nn.Module):
         t_node_emb = self.get_emb_from_id(t_nodes,news_id,dim_num=2)
 
         beta = torch.sigmoid(self.bilinear(s_node_emb, t_node_emb)).squeeze(-1) # (batch) Equation-11 torch.sigmoid
-        r_t = beta / torch.pow(Variable(e_times).to(self.device)+1e-5, self.theta)
-        # delta_e_pred cannot be  negative
-        delta_e_pred = ( r_t * Variable(node_sum).to(self.device) * (self.zeta * torch.pow(Variable(node_sum-1).to(self.device), self.gamma))) # Equation-10
+        e_times = Variable(e_times).abs().to(self.device)+1e-5
+        r_t = beta / torch.pow(e_times, self.theta)
+        node_sum = Variable(node_sum).abs().to(self.device)
+        delta_e_pred = ( r_t * node_sum * (self.zeta * torch.pow((node_sum-1).abs(), self.gamma))) # Equation-10
 
         if torch.isnan(delta_e_pred).any():
             print('beta',beta,'e_times',e_times,'self.theta',self.theta,
