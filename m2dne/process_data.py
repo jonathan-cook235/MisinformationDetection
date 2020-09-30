@@ -328,7 +328,7 @@ def create_dataset(directed, file_path, hist_len, neg_size, save_graph_path,
 
     graph_data_dict = dict()
     node_dim_dict = dict()
-    max_d_time_dict = dict()
+    max_timestamp_dict = dict()
 
     trees_to_parse = glob.glob(os.path.join(file_path, "tree/*.txt"))
     number_files = len(trees_to_parse)
@@ -369,7 +369,7 @@ def create_dataset(directed, file_path, hist_len, neg_size, save_graph_path,
 
         graph_data_dict[news_id] = graph_data
         node_dim_dict[news_id] = graph_data.get_node_dim()
-        max_d_time_dict[news_id] = graph_data.get_max_d_time()
+        max_timestamp_dict[news_id] = graph_data.get_max_timestamp()
         # graph_id += 1
 
     # Twitter15: 1490  vs 983
@@ -378,9 +378,9 @@ def create_dataset(directed, file_path, hist_len, neg_size, save_graph_path,
     # graph_num = graph_id# the number of graph-data + 1
     node_dim = int(
         np.max(list(node_dim_dict.values())))  ## Check this: the number of nodes in all graphs?
-    max_d_time = np.max(list(max_d_time_dict.values()))  ## ??? ##
+    max_timestamp = np.max(list(max_timestamp_dict.values()))  ## ??? ##
 
-    return graph_data_dict, node_dim_dict, max_d_time_dict, node_dim, max_d_time, \
+    return graph_data_dict, node_dim_dict, max_timestamp_dict, node_dim, max_timestamp, \
            train_ids, val_ids, test_ids, labels, news_ids_to_consider, \
            preprocessed_tweet_fts, preprocessed_user_fts, num_tweet_features, num_user_features
 

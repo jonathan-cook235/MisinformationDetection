@@ -33,7 +33,7 @@ class DataHelper(Dataset):
         self.directed = directed
         self.transform = transform
 
-        self.max_d_time = -sys.maxsize  # Time interval [0, T]
+        self.max_timestamp = -sys.maxsize  # Time interval [0, T]
 
         self.NEG_SAMPLING_POWER = 0.75
         self.neg_table_size = int(1e5)#1e8
@@ -56,8 +56,6 @@ class DataHelper(Dataset):
         # self.user_tweet_dict = {0: 0}  # user_id:tweet_id
 
         with open(file_path, 'rt') as infile:
-
-            # node_int  = 0
             time_shift = 0
             for line in infile.readlines():
                 tweet_in, tweet_out, user_in, user_out, time_in, time_out = util.parse_edge_line(line)
@@ -70,12 +68,7 @@ class DataHelper(Dataset):
                     self.user_tweet_dict[user_out] = tweet_out
                     continue # exclude the root marker
 
-
-                # if user_in == 760576918085337088 or
-
                 s_node = user_in
-                # node_int += 1
-                # s_node = node_int
                 if s_node in self.user_tweet_dict:
                     if  tweet_in != self.user_tweet_dict[s_node]:
                         print('s-user have multiple tweets')
@@ -83,8 +76,6 @@ class DataHelper(Dataset):
                     self.user_tweet_dict[s_node] = tweet_in
 
                 t_node = user_out
-                # node_int += 1
-                # t_node = node_int
                 if t_node in self.user_tweet_dict:
                     if tweet_out != self.user_tweet_dict[t_node]:
                         print('t-user have multiple tweets')
@@ -94,40 +85,38 @@ class DataHelper(Dataset):
                 # TICK-Check This: time_out  or (time_out - time_in). Refer to d_time in  local_forward
                 time_out += time_shift  # fix buggy dataset
                 assert time_out >= 0
-                # d_time = np.abs(time_out - time_in)
-                # assert d_time >= 0
-                d_time = time_out
+                timestamp = time_out
 
                 # s_node = user_tweet_dict[user_in] ## node_index --> node_int ##
                 # t_node = user_tweet_dict[user_out] ## node_index --> node_int  ##
 
                 self.node_set.update([s_node, t_node])  # node set
-                self.edge_list.append((s_node,t_node,d_time))  # edge list
+                self.edge_list.append((s_node,t_node,timestamp))  # edge list
                 if not directed:
-                    self.edge_list.append((t_node,s_node,d_time))
+                    self.edge_list.append((t_node,s_node,timestamp))
 
                 # each s_node should have a sequence of history nodes, which means s_node occurs more than once.
                 if s_node not in self.node2hist:
                     self.node2hist[s_node] = list()
-                self.node2hist[s_node].append((t_node, d_time))
+                self.node2hist[s_node].append((t_node, timestamp))
                 if not directed:
                     # TICK-Check This: if this is directed, we will lose t_node in the self.node2hist
                     # Can implement direct graphs by removing t-node from local_forward in train_mmdne.py (Equation-2)
                     if t_node not in self.node2hist:
                         self.node2hist[t_node] = list()
-                    self.node2hist[t_node].append((s_node, d_time))
+                    self.node2hist[t_node].append((s_node, timestamp))
 
                 if s_node not in self.node_time_nodes:
                     self.node_time_nodes[s_node] = dict()
-                if d_time not in self.node_time_nodes[s_node]:
-                    self.node_time_nodes[s_node][d_time] = list()
-                self.node_time_nodes[s_node][d_time].append(t_node)
+                if timestamp not in self.node_time_nodes[s_node]:
+                    self.node_time_nodes[s_node][timestamp] = list()
+                self.node_time_nodes[s_node][timestamp].append(t_node)
                 if not directed:  # undirected
                     if t_node not in self.node_time_nodes:
                         self.node_time_nodes[t_node] = dict()
-                    if d_time not in self.node_time_nodes[t_node]:
-                        self.node_time_nodes[t_node][d_time] = list()
-                    self.node_time_nodes[t_node][d_time].append(s_node)
+                    if timestamp not in self.node_time_nodes[t_node]:
+                        self.node_time_nodes[t_node][timestamp] = list()
+                    self.node_time_nodes[t_node][timestamp].append(s_node)
 
                 if s_node not in self.degrees:
                     self.degrees[s_node] = 0
@@ -137,20 +126,20 @@ class DataHelper(Dataset):
                 self.degrees[t_node] += 1
 
                 ## XXX ## avoid the same timestamp
-                if d_time > self.max_d_time:
-                    self.max_d_time = d_time  # record the max time
+                if timestamp > self.max_timestamp:
+                    self.max_timestamp = timestamp  # record the max time
 
-                while d_time in self.time_stamp:
-                    d_time = d_time + 1e-5 * np.random.randint(0,100)
-                self.time_stamp.append(d_time)
+                # while d_time in self.time_stamp:
+                #     d_time = d_time + 1e-5 * np.random.randint(0,100)
+                self.time_stamp.append(timestamp)
 
-                if d_time not in self.time_edges_dict:
-                    self.time_edges_dict[d_time] = []
-                self.time_edges_dict[d_time].append((s_node, t_node))
-                if d_time not in self.time_nodes_dict:
-                    self.time_nodes_dict[d_time] = []
-                self.time_nodes_dict[d_time].append(s_node)
-                self.time_nodes_dict[d_time].append(t_node)
+                if timestamp not in self.time_edges_dict:
+                    self.time_edges_dict[timestamp] = []
+                self.time_edges_dict[timestamp].append((s_node, t_node))
+                if timestamp not in self.time_nodes_dict:
+                    self.time_nodes_dict[timestamp] = []
+                self.time_nodes_dict[timestamp].append(s_node)
+                self.time_nodes_dict[timestamp].append(t_node)
 
         self.time_stamp = sorted(list(set(self.time_stamp)))  # !!! time from 0 to 1
         self.node_list = list(self.node_set)
@@ -169,7 +158,7 @@ class DataHelper(Dataset):
             self.data_size += len(self.node2hist[s])
 
         self.max_nei_len = max(map(lambda x: len(x), self.node2hist.values()))  # 955
-        # print ('\t#nodes: {}, #edges: {}, #time_stamp: {}'.
+        # print ('\t#nodes: {}, #edges: {}, #timestamp: {}'.
         #        format(self.node_dim,len(self.edge_list),len(self.time_stamp)))
         # print ('\tavg. degree: {}'.format(sum(self.degrees.values())/len(self.degrees)))
         # print ('\tmax neighbors length: {}'.format(self.max_nei_len))
@@ -223,8 +212,8 @@ class DataHelper(Dataset):
     def get_node_dim(self):
         return self.node_dim
 
-    def get_max_d_time(self):
-        return self.max_d_time
+    def get_max_timestamp(self):
+        return self.max_timestamp
 
     def init_neg_table(self):
         tot_sum, cur_sum, por = 0., 0., 0.
