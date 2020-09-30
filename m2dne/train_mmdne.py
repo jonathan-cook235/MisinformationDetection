@@ -308,10 +308,10 @@ if __name__ == '__main__':
 
 
     if train_mode:
-    # with autograd.detect_anomaly():
-        train_func(mmdne, optim)
+        with autograd.detect_anomaly():
+            train_func(mmdne, optim)
 
-        state_dict = mmdne.state_dict()
+            state_dict = mmdne.state_dict()
         torch.save(state_dict, os.path.join(mmdne.save_model_path, mmdne.model_name))
     else:
         try:
