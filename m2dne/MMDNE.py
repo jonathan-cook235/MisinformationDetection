@@ -410,11 +410,11 @@ class MMDNE(nn.Module):
         vera_loss = self.veracity_loss(news_id)
 
         weighted_local_loss = self.epsilon1 * local_loss.sum()
-        weighted_global_loss = weighted_local_loss
-        # weighted_global_loss = self.epsilon2 * global_loss.sum()
+        # weighted_global_loss = weighted_local_loss
+        weighted_global_loss = self.epsilon2 * global_loss.sum()
         weighted_vera_loss = self.epsilon * vera_loss
 
-        loss = weighted_local_loss + weighted_vera_loss #+ weighted_global_loss
+        loss = weighted_local_loss + weighted_vera_loss + weighted_global_loss
 
         return loss, weighted_local_loss, weighted_global_loss, weighted_vera_loss
 
@@ -518,7 +518,7 @@ def train_func(mmdne, optim):
 
         if epoch % 1 == 0:# and epoch != 0:
             mmdne.eval()
-
+            print('#############################################')
             ## Evaluate the temporal predictions
             val_loss, val_local_loss, val_global_loss, val_vera_loss, val_num_datapoints =\
                 eval_temporal_pred(mmdne, mmdne.val_ids)
@@ -548,7 +548,9 @@ def train_func(mmdne, optim):
             print('--validation accuracy: {:.5f}, correct {} out of {}'.format(val_acc, val_correct, val_n_samples))
 
             test_acc, test_correct, test_n_samples = eval_veracity_func(mmdne, mmdne.test_ids)
-            print('--test accuracy: {:.5f}, correct {} out of {}'.format(test_acc, test_correct, test_n_samples))
+            print('--test accuracy: {:.5f}, correct {} out of {}\n'.format(test_acc, test_correct, test_n_samples))
+
+            print('#############################################')
 
 def eval_veracity_func(mmdne, news_id_consider):
 
