@@ -248,7 +248,7 @@ class MMDNE(nn.Module):
         return p_lambda, n_lambda_s#, n_lambda_t  # max p_lambda, min n_lambda
 
     def global_forward(self, s_nodes, t_nodes, e_times, node_sum,news_id):
-        print('self.theta',self.theta, 'self.zeta',self.zeta, 'self.gamma',self.gamma,)
+        # print('self.theta',self.theta, 'self.zeta',self.zeta, 'self.gamma',self.gamma,)
         s_node_emb = self.get_emb_from_id(s_nodes,news_id,dim_num=2)
         t_node_emb = self.get_emb_from_id(t_nodes,news_id,dim_num=2)
 
@@ -256,7 +256,7 @@ class MMDNE(nn.Module):
         e_times = Variable(e_times).abs().to(self.device)+1e-5
         r_t = beta / torch.pow(e_times, self.theta)
         node_sum = Variable(node_sum).abs().to(self.device)
-        # delta_e_pred must be non-negative
+        # delta_e_pred must be non-negative; node_sum-1
         delta_e_pred = torch.relu( r_t * node_sum * (self.zeta * torch.pow(node_sum, self.gamma))) # Equation-10
 
         if torch.isnan(delta_e_pred).any():
@@ -266,7 +266,7 @@ class MMDNE(nn.Module):
                   'self.zeta',self.zeta, 'self.gamma',self.gamma,
                   'torch.pow(node_sum, self.gamma)', torch.pow(node_sum, self.gamma)
                   )
-            # assert(not torch.isnan(delta_e_pred).any())
+            assert(not torch.isnan(delta_e_pred).any())
         return delta_e_pred
 
     def local_loss(self, s_nodes, t_nodes, e_times,
@@ -297,7 +297,7 @@ class MMDNE(nn.Module):
                   'torch.log(delta_e_pred + 1e-5)',torch.log(delta_e_pred + 1e-5),
                   'torch.log(Variable(delta_e_true) + 1e-5)',torch.log(Variable(delta_e_true).to(self.device) + 1e-5),
                   'loss',loss)
-            # assert (not torch.isnan(loss))
+            assert (not torch.isnan(loss))
         return loss
 
     def veracity_predict(self, news_id):
