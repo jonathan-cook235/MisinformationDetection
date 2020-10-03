@@ -24,15 +24,14 @@ import torch.multiprocessing as mp
 from mmdne_model import MMDNE,FType,LType
 
 
-
 parser = argparse.ArgumentParser(description='Train the TPP network.')
 parser.add_argument('--dataset', choices=["twitter15", "twitter16"],
-                    help='Training dataset', default="twitter15")
+                    help='Training dataset', default="twitter16")
 parser.add_argument('--optimizer', choices=["Adam", "SGD"],
                     help='optimizer', default="Adam")
 parser.add_argument('--learning_rate', default=1e-3, type=float,
                     help='learning rate')
-parser.add_argument('--epoch_num', default=1000, type=int,
+parser.add_argument('--epoch_num', default=200, type=int,
                     help='Number of epochs')
 parser.add_argument('--batch_size', default=512, type=int,
                     help='Batch_size')
@@ -57,7 +56,7 @@ parser.add_argument('--dropout', type=float, default=0.1, help='Dropout probabil
 parser.add_argument('--epsilon', type=float, default=10, help='veracity loss co-efficient')
 parser.add_argument('--epsilon1', type=float, default=1, help='local loss co-efficient')
 parser.add_argument('--epsilon2', type=float, default=0.1, help='global loss co-efficient')
-parser.add_argument('--enable_cuda', type=bool, default=True,
+parser.add_argument('--enable_cuda', type=bool, default=False,
                     help='whether to use gpu')
 parser.add_argument('--gpu', type=int, default=1, help='Idx for the gpu to use')
 parser.add_argument('--backprop_every', type=int, default=50,

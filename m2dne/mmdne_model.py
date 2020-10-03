@@ -350,10 +350,10 @@ class MMDNE(nn.Module):
         vera_loss = self.veracity_loss(news_id)
 
         weighted_local_loss = self.epsilon1 * local_loss.mean()
-        # weighted_global_loss = weighted_local_loss
-        weighted_global_loss = self.epsilon2 * global_loss.mean()
+        weighted_global_loss = weighted_local_loss
+        # weighted_global_loss = self.epsilon2 * global_loss.mean()
         weighted_vera_loss = self.epsilon * vera_loss
 
-        loss = weighted_local_loss + weighted_vera_loss + weighted_global_loss
+        loss = weighted_local_loss + weighted_vera_loss #+ weighted_global_loss
 
         return loss, weighted_local_loss, weighted_global_loss, weighted_vera_loss
