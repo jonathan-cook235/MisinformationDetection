@@ -56,7 +56,7 @@ parser.add_argument('--dropout', type=float, default=0.1, help='Dropout probabil
 parser.add_argument('--epsilon', type=float, default=10, help='veracity loss co-efficient')
 parser.add_argument('--epsilon1', type=float, default=1, help='local loss co-efficient')
 parser.add_argument('--epsilon2', type=float, default=0.1, help='global loss co-efficient')
-parser.add_argument('--enable_cuda', type=bool, default=False,
+parser.add_argument('--enable_cuda', type=bool, default=True,
                     help='whether to use gpu')
 parser.add_argument('--gpu', type=int, default=1, help='Idx for the gpu to use')
 parser.add_argument('--backprop_every', type=int, default=50,
