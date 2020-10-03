@@ -26,17 +26,17 @@ from mmdne_model import MMDNE,FType,LType
 
 parser = argparse.ArgumentParser(description='Train the TPP network.')
 parser.add_argument('--dataset', choices=["twitter15", "twitter16"],
-                    help='Training dataset', default="twitter16")
+                    help='Training dataset', default="twitter15")
 parser.add_argument('--optimizer', choices=["Adam", "SGD"],
                     help='optimizer', default="Adam")
-parser.add_argument('--learning_rate', default=1e-3, type=float,
+parser.add_argument('--learning_rate', default=1e-4, type=float,
                     help='learning rate')
-parser.add_argument('--epoch_num', default=200, type=int,
+parser.add_argument('--epoch_num', default=100, type=int,
                     help='Number of epochs')
 parser.add_argument('--batch_size', default=512, type=int,
                     help='Batch_size')
-parser.add_argument('--emb_size', default=64, type=int,
-                    help='embedding_size')
+parser.add_argument('--emb_size', default=128, type=int,
+                    help='embedding_size')#64
 parser.add_argument('--only_binary', action='store_true',
                     help='Reduces the problem to binary classification')
 parser.add_argument('--neg_size', default=5, type=int,
