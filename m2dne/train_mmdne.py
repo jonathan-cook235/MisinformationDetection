@@ -33,6 +33,8 @@ parser.add_argument('--learning_rate', default=1e-4, type=float,
                     help='learning rate')
 parser.add_argument('--epoch_num', default=100, type=int,
                     help='Number of epochs')
+parser.add_argument('--save_epochs', default=10, type=int,
+                    help='Save every some number of epochs')
 parser.add_argument('--batch_size', default=512, type=int,
                     help='Batch_size')
 parser.add_argument('--emb_size', default=128, type=int,
@@ -211,6 +213,10 @@ def train_func(mmdne, optim):
             print('--test accuracy: {:.5f}, correct {} out of {}\n'.format(test_acc, test_correct, test_n_graphs))
 
             print('#############################################')
+
+        if epoch % args.save_epochs == 0:
+            state_dict = mmdne.state_dict()
+            torch.save(state_dict, os.path.join(mmdne.save_model_path, mmdne.model_name))
 
 def eval_veracity_func(mmdne, news_id_consider):
 
