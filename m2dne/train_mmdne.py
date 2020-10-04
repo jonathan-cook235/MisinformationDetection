@@ -25,7 +25,7 @@ from mmdne_model import MMDNE,FType,LType
 
 
 parser = argparse.ArgumentParser(description='Train the TPP network.')
-parser.add_argument('--train_mode', default=True,
+parser.add_argument('--train_mode', default='True',
                     help='Train a model or evaluate')
 parser.add_argument('--dataset', choices=["twitter15", "twitter16"],
                     help='Training dataset', default="twitter15")
@@ -312,7 +312,7 @@ if __name__ == '__main__':
         optim = Adam(lr=args.learning_rate, weight_decay=0.01, params=mmdne.para_to_opt)
 
 
-    if args.train_mode:
+    if args.train_mode == 'True':
         # with autograd.detect_anomaly():
         train_func(mmdne, optim)
 
