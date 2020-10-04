@@ -30,13 +30,12 @@ class MMDNE(nn.Module):
                  batch_size=1000, epoch_num=1,
                  only_binary=True,seed=64, backprop_every = 10,
                  tlp_flag=False, trend_prediction=False,device='cpu',gpu=-1,
-                 epsilon=1.0, epsilon1=1.0,epsilon2=1.0, dropout=0.1
+                 epsilon=1.0, epsilon1=1.0,epsilon2=1.0, dropout=0.5
     ):
         super(MMDNE, self).__init__()
         self.emb_size = emb_size
         self.neg_size = neg_size
         self.hist_len = hist_len
-        # self.gat_hidden_size = gat_hidden_size
 
         self.only_binary = only_binary
 
@@ -99,6 +98,7 @@ class MMDNE(nn.Module):
         self.node_emb_output1 = nn.Linear(self.emb_size, int(self.emb_size//4))
         self.node_emb_output2 = nn.Linear(int(self.emb_size//4), self.output_dim)
 
+        # p – probability of an element to be zeroed
         self.dropout_layer = nn.Dropout(self.dropout)
         self.leakyrelu = torch.nn.LeakyReLU(0.2)  # alpha =0.2 for leakyrelu
         # self.W, self.att_param,
@@ -144,7 +144,7 @@ class MMDNE(nn.Module):
 
         # node_fts = user_fts
         node_fts = torch.cat([user_fts, tweet_fts], dim=-1).to(self.device)
-        node_emb = self.fts2emb(node_fts)  # (bach, emb_dim)
+        node_emb = self.dropout_layer(self.fts2emb(node_fts))  # (bach, emb_dim)
         return node_emb
 
     def local_forward(self, s_nodes, t_nodes, e_times,
@@ -214,26 +214,20 @@ class MMDNE(nn.Module):
         # global_att_t = global_att[:, 1]
         # self.global_attention = global_att
 
-        p_mu = self.bilinear(s_node_emb, t_node_emb).squeeze(-1)
-        p_alpha_s = self.bilinear(s_h_node_emb, t_node_emb.unsqueeze(1).repeat(1, self.hist_len, 1)).squeeze(-1)# batch-size, hist-len, emb-size
-        # p_alpha_t = self.bilinear(t_h_node_emb, s_node_emb.unsqueeze(1).repeat(1, self.hist_len, 1)).squeeze(-1)
+        p_mu = self.dropout_layer(self.bilinear(s_node_emb, t_node_emb)).squeeze(-1)
+        p_alpha_s = self.dropout_layer(self.bilinear(s_h_node_emb, t_node_emb.unsqueeze(1).repeat(1, self.hist_len, 1))).squeeze(-1)# batch-size, hist-len, emb-size
 
         aaa = (att_s_his_s * p_alpha_s * torch.exp(delta_s * Variable(d_time_s).to(self.device)) * Variable(s_h_time_mask).to(self.device)).sum(dim=1)
-        # aaa = global_att_s * (att_s_his_s * p_alpha_s * torch.exp(delta_s * Variable(d_time_s)) * Variable(s_h_time_mask)).sum(dim=1)
-        # bbb = global_att_t * (att_t_his_t * p_alpha_t * torch.exp(delta_t * Variable(d_time_t)) * Variable(t_h_time_mask)).sum(dim=1)
-
-        p_lambda = p_mu \
-                   + aaa \
-                   # + bbb # remove the history of t_node
+        p_lambda = p_mu + aaa
 
         # s_n_node_emb = self.get_emb_from_id(s_neg_node,news_id, dim_num=3, dim_size=self.neg_size)
         t_n_node_emb = self.get_emb_from_id(t_neg_node,news_id,dim_num=3, dim_size=self.neg_size)
 
-        n_mu_s = self.bilinear(s_node_emb.unsqueeze(1).repeat(1, self.neg_size, 1), t_n_node_emb).squeeze(-1)  # (batch, neg_len)
+        n_mu_s = self.dropout_layer(self.bilinear(s_node_emb.unsqueeze(1).repeat(1, self.neg_size, 1), t_n_node_emb)).squeeze(-1)  # (batch, neg_len)
         # n_mu_t = self.bilinear(t_node_emb.unsqueeze(1).repeat(1, self.neg_size, 1), s_n_node_emb).squeeze(-1)
 
-        n_alpha_s = self.bilinear(s_h_node_emb.unsqueeze(2).repeat(1, 1, self.neg_size, 1),
-                                  t_n_node_emb.unsqueeze(1).repeat(1, self.hist_len, 1, 1)).squeeze(-1)
+        n_alpha_s = self.dropout_layer(self.bilinear(s_h_node_emb.unsqueeze(2).repeat(1, 1, self.neg_size, 1),
+                                  t_n_node_emb.unsqueeze(1).repeat(1, self.hist_len, 1, 1))).squeeze(-1)
         # n_alpha_t = self.bilinear(t_h_node_emb.unsqueeze(2).repeat(1, 1, self.neg_size, 1),
         #                           s_n_node_emb.unsqueeze(1).repeat(1, self.hist_len, 1, 1)).squeeze(-1)
 
@@ -257,7 +251,7 @@ class MMDNE(nn.Module):
         s_node_emb = self.get_emb_from_id(s_nodes,news_id,dim_num=2)
         t_node_emb = self.get_emb_from_id(t_nodes,news_id,dim_num=2)
 
-        beta = torch.sigmoid(self.bilinear(s_node_emb, t_node_emb)).squeeze(-1) # (batch) Equation-11 torch.sigmoid
+        beta = torch.sigmoid(self.dropout_layer(self.bilinear(s_node_emb, t_node_emb))).squeeze(-1) # (batch) Equation-11 torch.sigmoid
         e_times = Variable(e_times).abs().to(self.device)+1e-5
         r_t = beta / torch.pow(e_times, self.theta)
         node_sum = Variable(node_sum).abs().to(self.device)

@@ -25,15 +25,15 @@ from mmdne_model import MMDNE,FType,LType
 
 
 parser = argparse.ArgumentParser(description='Train the TPP network.')
-parser.add_argument('--train_mode', default='True-',
+parser.add_argument('--train_mode', default='True',
                     help='Train a model or evaluate')
 parser.add_argument('--dataset', choices=["twitter15", "twitter16"],
-                    help='Training dataset', default="twitter15")
+                    help='Training dataset', default="twitter16")
 parser.add_argument('--optimizer', choices=["Adam", "SGD"],
                     help='optimizer', default="Adam")
 parser.add_argument('--learning_rate', default=1e-3, type=float,
                     help='learning rate')
-parser.add_argument('--epoch_num', default=10, type=int,
+parser.add_argument('--epoch_num', default=100, type=int,
                     help='Number of epochs')
 parser.add_argument('--save_epochs', default=10, type=int,
                     help='Save every some number of epochs')
@@ -56,7 +56,7 @@ parser.add_argument('--time_cutoff',
 parser.add_argument('--seed', default=64, type=int,
                     help='Seed for train/val/test split')
 parser.add_argument('--patience', type=int, default=5, help='Patience for early stopping')
-parser.add_argument('--dropout', type=float, default=0.1, help='Dropout probability')
+parser.add_argument('--dropout', type=float, default=0.5, help='Dropout probability')
 parser.add_argument('--epsilon', type=float, default=10, help='veracity loss co-efficient')
 parser.add_argument('--epsilon1', type=float, default=1, help='local loss co-efficient')
 parser.add_argument('--epsilon2', type=float, default=0.1, help='global loss co-efficient')
@@ -138,6 +138,9 @@ def train_func(mmdne, optim):
     news_id_list = list(mmdne.graph_data_dict.keys())
     train_news_id_list = [news_id for news_id in news_id_list if news_id in mmdne.train_ids]
 
+    best_eval_acc = 0
+    cum_times = 0
+
     print('training...')
     graph_num = 0
     # with mp.Pool(os.cpu_count()) as pool:
@@ -180,17 +183,20 @@ def train_func(mmdne, optim):
                 total_graph_vera_loss = 0
                 total_num_datapoints = 0
 
-        if epoch % 1 == 0:# and epoch != 0:
-
-            ## Evaluate the temporal predictions
-            eval_func(mmdne)
-
         if epoch % args.save_epochs == 0:
             state_dict = mmdne.state_dict()
             torch.save(state_dict, os.path.join(mmdne.save_model_path, mmdne.model_name))
 
+        if epoch % 1 == 0:# and epoch != 0:
 
-def eval_func(mmdne):
+            ## Evaluate
+            best_eval_acc, cum_times = eval_func(mmdne, best_eval_acc)
+
+        ## early stopping
+        if cum_times >= args.patience:
+            break
+
+def eval_func(mmdne, best_eval_acc=0, cum_times = 0):
     mmdne.eval()
     print('#############################################')
     val_loss, val_local_loss, val_global_loss, val_vera_loss, val_num_datapoints = \
@@ -219,6 +225,14 @@ def eval_func(mmdne):
     test_acc, test_correct, test_n_graphs = eval_veracity_func(mmdne, mmdne.test_ids)
     print('--test accuracy: {:.5f}, correct {} out of {}\n'.format(test_acc, test_correct, test_n_graphs))
     print('#############################################')
+
+    if val_acc > best_eval_acc:
+        best_eval_acc = val_acc
+        cum_times = 0
+    else:
+        cum_times += 1
+
+    return best_eval_acc, cum_times
 
 
 def eval_veracity_func(mmdne, news_id_consider):
