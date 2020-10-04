@@ -25,6 +25,8 @@ from mmdne_model import MMDNE,FType,LType
 
 
 parser = argparse.ArgumentParser(description='Train the TPP network.')
+parser.add_argument('--train_mode', default=True,
+                    help='Train a model or evaluate')
 parser.add_argument('--dataset', choices=["twitter15", "twitter16"],
                     help='Training dataset', default="twitter15")
 parser.add_argument('--optimizer', choices=["Adam", "SGD"],
@@ -182,41 +184,41 @@ def train_func(mmdne, optim):
             mmdne.eval()
             print('#############################################')
             ## Evaluate the temporal predictions
-            val_loss, val_local_loss, val_global_loss, val_vera_loss, val_num_datapoints =\
-                eval_temporal_pred(mmdne, mmdne.val_ids)
-            print('\tValdation: avg loss = {:.5f}, '
-                  'avg local loss = {:.5f}, '
-                  'avg global loss = {:.5f}, '
-                  'avg veracity loss = {:.5f}\n'.format(val_loss / len(mmdne.val_ids),
-                                                        val_local_loss / len(mmdne.val_ids),
-                                                        val_global_loss / len(mmdne.val_ids),
-                                                        val_vera_loss / len(mmdne.val_ids)))
-
-            test_loss, test_local_loss, test_global_loss, test_vera_loss, test_num_datapoints = \
-                eval_temporal_pred(mmdne, mmdne.test_ids)
-            print('\tTest: avg loss = {:.5f}, '
-                  'avg local loss = {:.5f}, '
-                  'avg global loss = {:.5f}, '
-                  'avg veracity loss = {:.5f}\n'.format(test_loss / len(mmdne.test_ids),
-                                                        test_local_loss / len(mmdne.test_ids),
-                                                        test_global_loss / len(mmdne.test_ids),
-                                                        test_vera_loss / len(mmdne.test_ids)))
-
-            # Evaluate veracity classification
-            train_acc, train_correct, train_n_graphs = eval_veracity_func(mmdne, mmdne.train_ids)
-            print('--train accuracy: {:.5f}, correct {} out of {}'.format(train_acc, train_correct, train_n_graphs))
-
-            val_acc, val_correct, val_n_graphs = eval_veracity_func(mmdne, mmdne.val_ids)
-            print('--validation accuracy: {:.5f}, correct {} out of {}'.format(val_acc, val_correct, val_n_graphs))
-
-            test_acc, test_correct, test_n_graphs = eval_veracity_func(mmdne, mmdne.test_ids)
-            print('--test accuracy: {:.5f}, correct {} out of {}\n'.format(test_acc, test_correct, test_n_graphs))
-
-            print('#############################################')
+            eval_func(mmdne)
 
         if epoch % args.save_epochs == 0:
             state_dict = mmdne.state_dict()
             torch.save(state_dict, os.path.join(mmdne.save_model_path, mmdne.model_name))
+
+
+def eval_func(mmdne):
+    val_loss, val_local_loss, val_global_loss, val_vera_loss, val_num_datapoints = \
+        eval_temporal_pred(mmdne, mmdne.val_ids)
+    print('\tValdation: avg loss = {:.5f}, '
+          'avg local loss = {:.5f}, '
+          'avg global loss = {:.5f}, '
+          'avg veracity loss = {:.5f}\n'.format(val_loss / len(mmdne.val_ids),
+                                                val_local_loss / len(mmdne.val_ids),
+                                                val_global_loss / len(mmdne.val_ids),
+                                                val_vera_loss / len(mmdne.val_ids)))
+    test_loss, test_local_loss, test_global_loss, test_vera_loss, test_num_datapoints = \
+        eval_temporal_pred(mmdne, mmdne.test_ids)
+    print('\tTest: avg loss = {:.5f}, '
+          'avg local loss = {:.5f}, '
+          'avg global loss = {:.5f}, '
+          'avg veracity loss = {:.5f}\n'.format(test_loss / len(mmdne.test_ids),
+                                                test_local_loss / len(mmdne.test_ids),
+                                                test_global_loss / len(mmdne.test_ids),
+                                                test_vera_loss / len(mmdne.test_ids)))
+    # Evaluate veracity classification
+    train_acc, train_correct, train_n_graphs = eval_veracity_func(mmdne, mmdne.train_ids)
+    print('--train accuracy: {:.5f}, correct {} out of {}'.format(train_acc, train_correct, train_n_graphs))
+    val_acc, val_correct, val_n_graphs = eval_veracity_func(mmdne, mmdne.val_ids)
+    print('--validation accuracy: {:.5f}, correct {} out of {}'.format(val_acc, val_correct, val_n_graphs))
+    test_acc, test_correct, test_n_graphs = eval_veracity_func(mmdne, mmdne.test_ids)
+    print('--test accuracy: {:.5f}, correct {} out of {}\n'.format(test_acc, test_correct, test_n_graphs))
+    print('#############################################')
+
 
 def eval_veracity_func(mmdne, news_id_consider):
 
@@ -285,8 +287,6 @@ def eval_temporal_pred(mmdne, news_id_consider):
 
 
 if __name__ == '__main__':
-    train_mode =  False
-    print(time.asctime(time.localtime(time.time())))
 
     mmdne = MMDNE(file_path=data_file_path,
                   save_graph_path = save_graph_path,
@@ -319,37 +319,13 @@ if __name__ == '__main__':
         state_dict = mmdne.state_dict()
         torch.save(state_dict, os.path.join(mmdne.save_model_path, mmdne.model_name))
     else:
-        try:
-            output_model_file = os.path.join(mmdne.save_model_path, mmdne.model_name)
-            state_dict = torch.load(output_model_file)
-            mmdne.load_state_dict(state_dict)
-            # print("Successfully load: " + str(output_model_file))
+        output_model_file = os.path.join(mmdne.save_model_path, mmdne.model_name)
+        state_dict = torch.load(output_model_file)
+        mmdne.load_state_dict(state_dict)
+        # print("Successfully load: " + str(output_model_file))
 
-            mmdne.eval()
-            ## Evaluate the temporal predictions
-            val_loss, val_local_loss, val_global_loss, val_vera_loss, val_num_datapoints = \
-                eval_temporal_pred(mmdne, mmdne.val_ids)
-            print('\tValdation: avg loss = {:.3f}, '
-                  'avg local loss = {:.3f}, '
-                  'avg global loss = {:.3f}, '
-                  'avg veracity loss = {:.3f}\n'.format(val_loss / val_num_datapoints,
-                                                        val_local_loss / val_num_datapoints,
-                                                        val_global_loss / val_num_datapoints,
-                                                        val_vera_loss / val_num_datapoints))
-
-            test_loss, test_local_loss, test_global_loss, test_vera_loss, test_num_datapoints = \
-                eval_temporal_pred(mmdne, mmdne.test_ids)
-            print('\tTest: avg loss = {:.3f}, '
-                  'avg local loss = {:.3f}, '
-                  'avg global loss = {:.3f}, '
-                  'avg veracity loss = {:.3f}\n'.format(test_loss / test_num_datapoints,
-                                                        test_local_loss / test_num_datapoints,
-                                                        test_global_loss / test_num_datapoints,
-                                                        test_vera_loss / test_num_datapoints))
-
-        except:
-            print('Cannot find: ' + str(output_model_file))
-            # return None
+        mmdne.eval()
+        eval_func(mmdne)
 
 
 
