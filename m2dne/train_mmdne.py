@@ -285,7 +285,7 @@ def eval_temporal_pred(mmdne, news_id_consider):
 
 
 if __name__ == '__main__':
-    train_mode =  True
+    train_mode =  False
     print(time.asctime(time.localtime(time.time())))
 
     mmdne = MMDNE(file_path=data_file_path,
