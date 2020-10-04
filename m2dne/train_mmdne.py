@@ -312,7 +312,7 @@ if __name__ == '__main__':
         optim = Adam(lr=args.learning_rate, weight_decay=0.01, params=mmdne.para_to_opt)
 
 
-    if train_mode:
+    if args.train_mode:
         # with autograd.detect_anomaly():
         train_func(mmdne, optim)
 
