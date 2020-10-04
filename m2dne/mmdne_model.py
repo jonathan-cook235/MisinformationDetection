@@ -95,6 +95,7 @@ class MMDNE(nn.Module):
         self.fts2emb = nn.Linear(self.num_user_features+self.num_tweet_features, self.emb_size) #usage: y = self.fts2emb(x)
         self.bilinear = nn.Bilinear(self.emb_size, self.emb_size, 1)
         self.aggre_emb = nn.Linear(3*self.emb_size, self.emb_size)
+        # self.node_emb_output = nn.Linear(self.emb_size, self.output_dim)
         self.node_emb_output1 = nn.Linear(self.emb_size, int(self.emb_size//4))
         self.node_emb_output2 = nn.Linear(int(self.emb_size//4), self.output_dim)
 
@@ -102,11 +103,12 @@ class MMDNE(nn.Module):
         self.leakyrelu = torch.nn.LeakyReLU(0.2)  # alpha =0.2 for leakyrelu
         # self.W, self.att_param,
         self.para_to_opt = [self.delta_s, self.delta_t, self.zeta,self.gamma,self.theta, self.a] \
-                      + list(self.fts2emb.parameters()) \
-                      + list(self.bilinear.parameters()) \
-                      + list(self.aggre_emb.parameters()) \
-                      + list(self.node_emb_output1.parameters()) \
-                      + list(self.node_emb_output2.parameters()) \
+                           + list(self.fts2emb.parameters()) \
+                           + list(self.bilinear.parameters()) \
+                           + list(self.aggre_emb.parameters()) \
+                           + list(self.node_emb_output1.parameters()) \
+                           + list(self.node_emb_output2.parameters()) \
+        # + list(self.node_emb_output.parameters()) \
 
     def get_emb_from_id(self, user_id, news_id, dim_num=1, dim_size=None):
 
@@ -317,10 +319,11 @@ class MMDNE(nn.Module):
         all_node_emb_pool = torch.cat([all_node_emb_mean, all_node_emb_max, first_node_emb], dim=1)
 
         aggre_emb = self.leakyrelu(self.dropout_layer(self.aggre_emb(all_node_emb_pool)))
+        # output_emb = self.leakyrelu(self.dropout_layer(self.node_emb_output(aggre_emb)))
         output_emb1 = self.leakyrelu(self.dropout_layer(self.node_emb_output1(aggre_emb)))
-        output_emb2 = self.leakyrelu(self.dropout_layer(self.node_emb_output2(output_emb1)))
+        output_emb = self.leakyrelu(self.dropout_layer(self.node_emb_output2(output_emb1)))
 
-        output = F.log_softmax(output_emb2, dim=1)
+        output = F.log_softmax(output_emb, dim=1)
 
         return output
 

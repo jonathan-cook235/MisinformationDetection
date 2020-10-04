@@ -25,7 +25,7 @@ from mmdne_model import MMDNE,FType,LType
 
 
 parser = argparse.ArgumentParser(description='Train the TPP network.')
-parser.add_argument('--train_mode', default='True',
+parser.add_argument('--train_mode', default='True-',
                     help='Train a model or evaluate')
 parser.add_argument('--dataset', choices=["twitter15", "twitter16"],
                     help='Training dataset', default="twitter15")
@@ -33,7 +33,7 @@ parser.add_argument('--optimizer', choices=["Adam", "SGD"],
                     help='optimizer', default="Adam")
 parser.add_argument('--learning_rate', default=1e-3, type=float,
                     help='learning rate')
-parser.add_argument('--epoch_num', default=100, type=int,
+parser.add_argument('--epoch_num', default=10, type=int,
                     help='Number of epochs')
 parser.add_argument('--save_epochs', default=10, type=int,
                     help='Save every some number of epochs')
@@ -181,8 +181,7 @@ def train_func(mmdne, optim):
                 total_num_datapoints = 0
 
         if epoch % 1 == 0:# and epoch != 0:
-            mmdne.eval()
-            print('#############################################')
+
             ## Evaluate the temporal predictions
             eval_func(mmdne)
 
@@ -192,6 +191,8 @@ def train_func(mmdne, optim):
 
 
 def eval_func(mmdne):
+    mmdne.eval()
+    print('#############################################')
     val_loss, val_local_loss, val_global_loss, val_vera_loss, val_num_datapoints = \
         eval_temporal_pred(mmdne, mmdne.val_ids)
     print('\tValdation: avg loss = {:.5f}, '
@@ -309,22 +310,22 @@ if __name__ == '__main__':
     if args.optimizer == 'SGD':
         optim = SGD(lr=args.learning_rate, momentum=0.9, weight_decay=0.01, params=mmdne.para_to_opt)
     elif args.optimizer == 'Adam':
-        optim = Adam(lr=args.learning_rate, weight_decay=0.01, params=mmdne.para_to_opt)
+        optim = Adam(lr=args.learning_rate, weight_decay=0.1, params=mmdne.para_to_opt)#0.01
 
 
     if args.train_mode == 'True':
         # with autograd.detect_anomaly():
         train_func(mmdne, optim)
-
         state_dict = mmdne.state_dict()
         torch.save(state_dict, os.path.join(mmdne.save_model_path, mmdne.model_name))
-    else:
-        output_model_file = os.path.join(mmdne.save_model_path, mmdne.model_name)
-        state_dict = torch.load(output_model_file)
-        mmdne.load_state_dict(state_dict)
-        # print("Successfully load: " + str(output_model_file))
 
-        mmdne.eval()
+    else:
+        print('Evaluating...')
+        output_model_file = os.path.join(mmdne.save_model_path, mmdne.model_name)
+        # if  device.type == 'cpu':
+        state_dict = torch.load(output_model_file,map_location = device)
+        mmdne.load_state_dict(state_dict)
+
         eval_func(mmdne)
 
 
