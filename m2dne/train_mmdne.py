@@ -28,7 +28,7 @@ parser = argparse.ArgumentParser(description='Train the TPP network.')
 parser.add_argument('--train_mode', default='True',
                     help='Train a model or evaluate')
 parser.add_argument('--dataset', choices=["twitter15", "twitter16"],
-                    help='Training dataset', default="twitter16")
+                    help='Training dataset', default="twitter15")
 parser.add_argument('--optimizer', choices=["Adam", "SGD"],
                     help='optimizer', default="Adam")
 parser.add_argument('--learning_rate', default=1e-3, type=float,
