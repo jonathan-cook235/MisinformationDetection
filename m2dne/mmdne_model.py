@@ -297,7 +297,7 @@ class MMDNE(nn.Module):
                   'torch.log(Variable(delta_e_true) + 1e-5)',torch.log(Variable(delta_e_true).to(self.device) + 1e-5),
                   'loss',loss)
             assert (not torch.isnan(loss))
-        return loss
+        return loss, delta_e_pred
 
     def veracity_predict(self, news_id):
 
@@ -348,7 +348,7 @@ class MMDNE(nn.Module):
                                      t_h_nodes, t_h_times, t_h_time_mask,
                                      neg_s_node, neg_t_node,news_id)
 
-        global_loss = self.global_loss(s_nodes, t_nodes, e_times,
+        global_loss, forecast = self.global_loss(s_nodes, t_nodes, e_times,
                                       delta_e_true, node_sum,news_id)
         vera_loss = self.veracity_loss(news_id)
 
@@ -359,4 +359,4 @@ class MMDNE(nn.Module):
 
         loss = weighted_local_loss + weighted_vera_loss + weighted_global_loss
 
-        return loss, weighted_local_loss, weighted_global_loss, weighted_vera_loss
+        return loss, weighted_local_loss, weighted_global_loss, weighted_vera_loss, forecast, e_times, delta_e_true
