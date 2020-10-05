@@ -2,6 +2,7 @@ from __future__ import division
 import sys
 sys.path.append("../")
 
+import matplotlib.pyplot as plt
 import time
 import torch
 import torch.nn as nn
@@ -95,12 +96,11 @@ def forward_per_graph(news_id):
     graph_data = mmdne.graph_data_dict[news_id]
     num_datapoints = len(graph_data)
     loader = DataLoader(graph_data, batch_size=num_datapoints, shuffle=True, num_workers=10)
-
     for iii, sample_batched in enumerate(loader):
         # str
         # print(iii)
         optim.zero_grad()
-        batch_loss, batch_local_loss, batch_global_loss, batch_vera_loss = \
+        batch_loss, batch_local_loss, batch_global_loss, batch_vera_loss, forecast, e_times, true = \
             mmdne.update(sample_batched['source_node'],
                          sample_batched['target_node'],
                          sample_batched['event_time'].type(FType),
@@ -118,6 +118,8 @@ def forward_per_graph(news_id):
                          # sample_batched['edge_last_time_sum'].type(FType),
                          news_id
                          )
+
+
         # batch_loss.backward()
         # mmdne.opt.step()
 
@@ -126,7 +128,7 @@ def forward_per_graph(news_id):
         graph_global_loss += batch_global_loss
         graph_vera_loss += batch_vera_loss
 
-    return graph_loss, graph_local_loss, graph_global_loss, graph_vera_loss, num_datapoints
+    return graph_loss, graph_local_loss, graph_global_loss, graph_vera_loss, num_datapoints, forecast, e_times, true
 
 def train_func(mmdne, optim):
     total_graph_loss = 0
@@ -153,7 +155,7 @@ def train_func(mmdne, optim):
             # graph_batch_loss, graph_batch_local_loss, graph_batch_global_loss, graph_batch_vera_loss = \
             #     pool.map(forward_per_graph, batch_news_id_list)
             graph_num += 1
-            graph_loss, graph_local_loss, graph_global_loss, graph_vera_loss, num_datapoints = \
+            graph_loss, graph_local_loss, graph_global_loss, graph_vera_loss, num_datapoints, forecast = \
                 forward_per_graph(news_id)
 
             total_graph_loss += graph_loss
@@ -282,7 +284,7 @@ def eval_veracity_func(mmdne, news_id_consider):
 
     return  acc, correct, n_graphs
 
-def eval_temporal_pred(mmdne, news_id_consider):
+def eval_temporal_pred(mmdne, news_id_consider, eval_forecasting):
     news_id_list = list(mmdne.graph_data_dict.keys())
     eval_news_id_list = [news_id for news_id in news_id_list if news_id in news_id_consider]
 
@@ -294,8 +296,10 @@ def eval_temporal_pred(mmdne, news_id_consider):
 
     with torch.no_grad():
         for _, news_id in enumerate(eval_news_id_list):
-            graph_loss, graph_local_loss, graph_global_loss, graph_vera_loss, num_datapoints = \
+            graph_loss, graph_local_loss, graph_global_loss, graph_vera_loss, num_datapoints, forecast, e_times, true = \
                 forward_per_graph(news_id)
+
+            eval_forecasting(forecast, e_times, true)
 
             total_graph_loss += graph_loss.detach().cpu().numpy()
             total_graph_local_loss += graph_local_loss.detach().cpu().numpy()
@@ -305,6 +309,18 @@ def eval_temporal_pred(mmdne, news_id_consider):
 
     return total_graph_loss, total_graph_local_loss, total_graph_global_loss, total_graph_vera_loss, total_num_datapoints
 
+def eval_forecasting(forecast, true, e_times):
+    timestamps = e_times
+    for i in forecast:
+        if not forecast[0]:
+            forecast[i] += forecast[i-1]
+    for i in true:
+        if not true[0]:
+            true[i] += true[i-1]
+    plt.plot(timestamps, forecast)
+    plt.plot(timestamps, true)
+    plt.plot(timestamps, forecast-true)
+    plt.show
 
 if __name__ == '__main__':
 
