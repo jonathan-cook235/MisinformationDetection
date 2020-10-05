@@ -144,7 +144,7 @@ class MMDNE(nn.Module):
 
         # node_fts = user_fts
         node_fts = torch.cat([user_fts, tweet_fts], dim=-1).to(self.device)
-        node_emb = self.dropout_layer(self.fts2emb(node_fts))  # (bach, emb_dim)
+        node_emb = self.fts2emb(node_fts)  # (bach, emb_dim)
         return node_emb
 
     def local_forward(self, s_nodes, t_nodes, e_times,
@@ -214,8 +214,8 @@ class MMDNE(nn.Module):
         # global_att_t = global_att[:, 1]
         # self.global_attention = global_att
 
-        p_mu = self.dropout_layer(self.bilinear(s_node_emb, t_node_emb)).squeeze(-1)
-        p_alpha_s = self.dropout_layer(self.bilinear(s_h_node_emb, t_node_emb.unsqueeze(1).repeat(1, self.hist_len, 1))).squeeze(-1)# batch-size, hist-len, emb-size
+        p_mu = self.bilinear(s_node_emb, t_node_emb).squeeze(-1)
+        p_alpha_s = self.bilinear(s_h_node_emb, t_node_emb.unsqueeze(1).repeat(1, self.hist_len, 1)).squeeze(-1)# batch-size, hist-len, emb-size
 
         aaa = (att_s_his_s * p_alpha_s * torch.exp(delta_s * Variable(d_time_s).to(self.device)) * Variable(s_h_time_mask).to(self.device)).sum(dim=1)
         p_lambda = p_mu + aaa
@@ -223,11 +223,11 @@ class MMDNE(nn.Module):
         # s_n_node_emb = self.get_emb_from_id(s_neg_node,news_id, dim_num=3, dim_size=self.neg_size)
         t_n_node_emb = self.get_emb_from_id(t_neg_node,news_id,dim_num=3, dim_size=self.neg_size)
 
-        n_mu_s = self.dropout_layer(self.bilinear(s_node_emb.unsqueeze(1).repeat(1, self.neg_size, 1), t_n_node_emb)).squeeze(-1)  # (batch, neg_len)
+        n_mu_s = self.bilinear(s_node_emb.unsqueeze(1).repeat(1, self.neg_size, 1), t_n_node_emb).squeeze(-1)  # (batch, neg_len)
         # n_mu_t = self.bilinear(t_node_emb.unsqueeze(1).repeat(1, self.neg_size, 1), s_n_node_emb).squeeze(-1)
 
-        n_alpha_s = self.dropout_layer(self.bilinear(s_h_node_emb.unsqueeze(2).repeat(1, 1, self.neg_size, 1),
-                                  t_n_node_emb.unsqueeze(1).repeat(1, self.hist_len, 1, 1))).squeeze(-1)
+        n_alpha_s = self.bilinear(s_h_node_emb.unsqueeze(2).repeat(1, 1, self.neg_size, 1),
+                                  t_n_node_emb.unsqueeze(1).repeat(1, self.hist_len, 1, 1)).squeeze(-1)
         # n_alpha_t = self.bilinear(t_h_node_emb.unsqueeze(2).repeat(1, 1, self.neg_size, 1),
         #                           s_n_node_emb.unsqueeze(1).repeat(1, self.hist_len, 1, 1)).squeeze(-1)
 
@@ -251,7 +251,7 @@ class MMDNE(nn.Module):
         s_node_emb = self.get_emb_from_id(s_nodes,news_id,dim_num=2)
         t_node_emb = self.get_emb_from_id(t_nodes,news_id,dim_num=2)
 
-        beta = torch.sigmoid(self.dropout_layer(self.bilinear(s_node_emb, t_node_emb))).squeeze(-1) # (batch) Equation-11 torch.sigmoid
+        beta = torch.sigmoid(self.bilinear(s_node_emb, t_node_emb)).squeeze(-1) # (batch) Equation-11 torch.sigmoid
         e_times = Variable(e_times).abs().to(self.device)+1e-5
         r_t = beta / torch.pow(e_times, self.theta)
         node_sum = Variable(node_sum).abs().to(self.device)

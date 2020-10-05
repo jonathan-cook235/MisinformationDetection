@@ -229,6 +229,11 @@ def eval_func(mmdne, best_eval_acc=0, cum_times = 0):
     if val_acc > best_eval_acc:
         best_eval_acc = val_acc
         cum_times = 0
+
+        # save the best setting
+        state_dict = mmdne.state_dict()
+        torch.save(state_dict, os.path.join(mmdne.save_model_path, mmdne.model_name))
+
     else:
         cum_times += 1
 
