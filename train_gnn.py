@@ -68,11 +68,11 @@ def train(dataset, args):
         model = GNNStack(dataset_builder.num_node_features, args.hidden_dim, dataset_builder.num_classes, args)
         # our dataset.py excluded time-out in node-features
         ## four-class classification
-        # our train.py + dataset.py epoch 999, loss: 0.7059342861175537, Training accuracy: 0.6981, Validation accuracy: 0.5106, Test accuracy: 0.4895
+        # our train_gnn.py + dataset.py epoch 999, loss: 0.7059342861175537, Training accuracy: 0.6981, Validation accuracy: 0.5106, Test accuracy: 0.4895
         # orignal train. + dataset. epoch 999, loss: 0.1823281928558241, Training accuracy: 0.9313, Validation accuracy: 0.4468, Test accuracy: 0.5000
         #
         # our train + orig dataset. epoch 999, loss: 0.6975323029539802, Training accuracy: 0.7425, Validation accuracy: 0.5426, Test accuracy: 0.5211
-        # our train.py + dataset(with time-out) epoch 999 loss: 0.6702777634967457, Training accuracy: 0.7768, Validation accuracy: 0.5426, Test accuracy: 0.5105
+        # our train_gnn.py + dataset(with time-out) epoch 999 loss: 0.6702777634967457, Training accuracy: 0.7768, Validation accuracy: 0.5426, Test accuracy: 0.5105
         #                           overfitting epoch 1500, loss: 0.6550917042927309, Training accuracy: 0.7983,  Validation accuracy: 0.5426, Test accuracy: 0.4737
 
         ## binary classification: BAD!
