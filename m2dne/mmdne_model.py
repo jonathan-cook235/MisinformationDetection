@@ -60,8 +60,8 @@ class MMDNE(nn.Module):
             self.output_dim = 4
 
         ## obtain data-related model parameters
-        self.graph_data_dict, self.node_dim_dict, self.max_d_time_dict, \
-        self.node_dim, self.max_d_time, self.train_ids, self.val_ids, self.test_ids, \
+        self.graph_data_dict, self.node_dim_dict, self.max_timestamp_dict, \
+        self.node_dim, self.max_timestamp, self.train_ids, self.val_ids, self.test_ids, \
         self.labels, self.news_ids_to_consider, \
         self.preprocessed_tweet_fts, self.preprocessed_user_fts, \
         self.num_tweet_features, self.num_user_features = \
@@ -94,9 +94,9 @@ class MMDNE(nn.Module):
         self.fts2emb = nn.Linear(self.num_user_features+self.num_tweet_features, self.emb_size) #usage: y = self.fts2emb(x)
         self.bilinear = nn.Bilinear(self.emb_size, self.emb_size, 1)
         self.aggre_emb = nn.Linear(3*self.emb_size, self.emb_size)
-        # self.node_emb_output = nn.Linear(self.emb_size, self.output_dim)
-        self.node_emb_output1 = nn.Linear(self.emb_size, int(self.emb_size//4))
-        self.node_emb_output2 = nn.Linear(int(self.emb_size//4), self.output_dim)
+        self.node_emb_output = nn.Linear(self.emb_size, self.output_dim)
+        # self.node_emb_output1 = nn.Linear(self.emb_size, int(self.emb_size//4))
+        # self.node_emb_output2 = nn.Linear(int(self.emb_size//4), self.output_dim)
 
         # p – probability of an element to be zeroed
         self.dropout_layer = nn.Dropout(self.dropout)
@@ -106,9 +106,9 @@ class MMDNE(nn.Module):
                            + list(self.fts2emb.parameters()) \
                            + list(self.bilinear.parameters()) \
                            + list(self.aggre_emb.parameters()) \
-                           + list(self.node_emb_output1.parameters()) \
-                           + list(self.node_emb_output2.parameters()) \
-        # + list(self.node_emb_output.parameters()) \
+                           + list(self.node_emb_output.parameters()) \
+                           # + list(self.node_emb_output1.parameters()) \
+                           # + list(self.node_emb_output2.parameters()) \
 
     def get_emb_from_id(self, user_id, news_id, dim_num=1, dim_size=None):
 
@@ -214,9 +214,8 @@ class MMDNE(nn.Module):
         ## Compute the intensity lambda of positive (truely occurred) events
         p_mu = self.bilinear(s_node_emb, t_node_emb).squeeze(-1)
         p_alpha_s = self.bilinear(s_h_node_emb, t_node_emb.unsqueeze(1).repeat(1, self.hist_len, 1)).squeeze(-1)# batch-size, hist-len, emb-size
-
-        aaa = (att_s_his_s * p_alpha_s * torch.exp(delta_s * Variable(d_time_s).to(self.device)) * Variable(s_h_time_mask).to(self.device)).sum(dim=1)
-        p_lambda = p_mu + aaa
+        p_lambda = p_mu + (att_s_his_s * p_alpha_s * torch.exp(delta_s * Variable(d_time_s).to(self.device))
+                           * Variable(s_h_time_mask).to(self.device)).sum(dim=1)
 
         ## Compute the intensity lambda of negative (did not occur) events
         s_n_node_emb = self.get_emb_from_id(s_neg_node,news_id, dim_num=3, dim_size=self.neg_size)
@@ -314,9 +313,9 @@ class MMDNE(nn.Module):
         all_node_emb_pool = torch.cat([all_node_emb_mean, all_node_emb_max, first_node_emb], dim=1)
 
         aggre_emb = self.leakyrelu(self.dropout_layer(self.aggre_emb(all_node_emb_pool)))
-        # output_emb = self.leakyrelu(self.dropout_layer(self.node_emb_output(aggre_emb)))
-        output_emb1 = self.leakyrelu(self.dropout_layer(self.node_emb_output1(aggre_emb)))
-        output_emb = self.leakyrelu(self.dropout_layer(self.node_emb_output2(output_emb1)))
+        output_emb = self.leakyrelu(self.dropout_layer(self.node_emb_output(aggre_emb)))
+        # output_emb1 = self.leakyrelu(self.dropout_layer(self.node_emb_output1(aggre_emb)))
+        # output_emb = self.leakyrelu(self.dropout_layer(self.node_emb_output2(output_emb1)))
 
         output = F.log_softmax(output_emb, dim=1)
 
@@ -331,6 +330,22 @@ class MMDNE(nn.Module):
         vera_loss = criterion(output, y)
         return vera_loss
 
+    def timestamp_predict(self, intensity, print_info=False):
+        timestep = 1e-4
+        integral_ = torch.cumsum(timestep * intensity, dim=0)
+        # density for the time-until-next-event law
+        density = intensity * torch.exp(-integral_)
+        # Check density
+        if print_info:
+            print("sum of density:", (timestep * density).sum())
+
+        n_samples = 100
+        max_timestamp =  1 # after normalization
+        dt_vals = torch.linspace(0, max_timestamp, n_samples + 1).to(self.device)
+        t_pit = dt_vals * density  # integrand for the time estimator
+        # trapeze method
+        estimate_dt = (timestep * 0.5 * (t_pit[1:] + t_pit[:-1])).sum()
+
     def update(self, s_nodes, t_nodes, event_time,
                s_h_nodes, s_h_times, s_h_time_mask,
                t_h_nodes, t_h_times, t_h_time_mask,
@@ -339,10 +354,10 @@ class MMDNE(nn.Module):
                news_id):
 
         ## XXX ##
-        max_d_time = self.max_d_time_dict[news_id]
-        event_time = event_time/max_d_time
-        s_h_times = s_h_times/max_d_time
-        t_h_times = t_h_times/max_d_time
+        max_timestamp = self.max_timestamp_dict[news_id]
+        event_time = event_time/max_timestamp
+        s_h_times = s_h_times/max_timestamp
+        t_h_times = t_h_times/max_timestamp
 
         local_loss = self.local_loss(s_nodes, t_nodes, event_time,
                                      s_h_nodes, s_h_times, s_h_time_mask,
