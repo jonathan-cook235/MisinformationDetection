@@ -115,10 +115,6 @@ class MMDNE(nn.Module):
         graph_data = self.graph_data_dict[news_id]
         user_tweet_dict = graph_data.user_tweet_dict
 
-        # if torch.is_tensor(user_id):#int
-        #     batch_size = user_id.size()[0]
-        #     user_id = user_id.numpy()
-
         if dim_num==1:
             ##  only one node-id
             tweet_id = user_tweet_dict[user_id]
@@ -147,7 +143,7 @@ class MMDNE(nn.Module):
         node_emb = self.fts2emb(node_fts)  # (bach, emb_dim)
         return node_emb
 
-    def local_forward(self, s_nodes, t_nodes, e_times,
+    def local_forward(self, s_nodes, t_nodes, event_time,
                       s_h_nodes, s_h_times, s_h_time_mask,
                       t_h_nodes, t_h_times, t_h_time_mask,
                       s_neg_node,t_neg_node,news_id):
@@ -155,15 +151,14 @@ class MMDNE(nn.Module):
         s_node_emb = self.get_emb_from_id(s_nodes,news_id, dim_num=2)
         t_node_emb = self.get_emb_from_id(t_nodes,news_id, dim_num=2)
         s_h_node_emb = self.get_emb_from_id(s_h_nodes,news_id, dim_num=3, dim_size=self.hist_len)
-        # t_h_node_emb = self.get_emb_from_id(t_h_nodes,news_id, dim_num=3,dim_size=self.hist_len)
+        t_h_node_emb = self.get_emb_from_id(t_h_nodes,news_id, dim_num=3,dim_size=self.hist_len)
 
         delta_s = self.delta_s#.index_select(0, Variable(s_nodes.view(-1))).unsqueeze(1)  # (b,1)
-        d_time_s = torch.abs(e_times.unsqueeze(1) - s_h_times)  # (batch, hist_len)
-        # d_time_s = self.leakyrelu(d_time_s / max_d_time)
-        # delta_t = self.delta_t#.index_select(0, Variable(t_nodes.view(-1))).unsqueeze(1)  # TODO: delta_t ???
-        # d_time_t = torch.abs(e_times.unsqueeze(1) - t_h_times)  # (batch, hist_len)
-        # d_time_t = self.leakyrelu(d_time_t / max_d_time)
+        d_time_s = torch.abs(event_time.unsqueeze(1) - s_h_times)  # (batch, hist_len)
+        delta_t = self.delta_t#.index_select(0, Variable(t_nodes.view(-1))).unsqueeze(1)  # TODO: delta_t ???
+        d_time_t = torch.abs(event_time.unsqueeze(1) - t_h_times)  # (batch, hist_len)
 
+        ###############################################################
         # GAT attention_rewrite
         ## delta_s: exponential time-decaying
         for i in range(self.hist_len):
@@ -180,21 +175,22 @@ class MMDNE(nn.Module):
                 sim_s_s_his = torch.cat([sim_s_s_his,
                                          self.leakyrelu(torch.exp(-delta_s * d_time_s_i) * torch.mm(a_input, self.a))], dim=1)
 
-        # for i in range(self.hist_len):
-        #     t_h_node_emb_i = torch.transpose(t_h_node_emb[:, i:(i + 1), :], dim0=1, dim1=2).squeeze()
-        #     t_node_emb_i = t_node_emb
-        #     d_time_t_i = Variable(d_time_t)[:, i:(i + 1)]  # (b,1)
-        #     if i == 0:
-        #         a_input = torch.cat([torch.mm(t_node_emb_i, self.W), torch.mm(t_h_node_emb_i, self.W)], dim=1)  # (b, 2*dim)
-        #         sim_t_t_his = self.leakyrelu(torch.exp(-delta_s * d_time_t_i) * torch.mm(a_input, self.a))
-        #     else:
-        #         a_input = torch.cat([torch.mm(t_node_emb_i, self.W), torch.mm(t_h_node_emb_i, self.W)], dim=1)
-        #         sim_t_t_his = torch.cat([sim_t_t_his,
-        #                                  self.leakyrelu(torch.exp(-delta_s * d_time_t_i) * torch.mm(a_input, self.a))],
-        #                                 dim=1)
+        for i in range(self.hist_len):
+            t_h_node_emb_i = torch.transpose(t_h_node_emb[:, i:(i + 1), :], dim0=1, dim1=2).squeeze()
+            t_node_emb_i = t_node_emb
+            d_time_t_i = Variable(d_time_t)[:, i:(i + 1)].to(self.device)  # (b,1)
+            if i == 0:
+                # a_input = torch.cat([torch.mm(t_node_emb_i, self.W), torch.mm(t_h_node_emb_i, self.W)], dim=1)  # (b, 2*dim)
+                a_input = torch.cat([t_node_emb_i, t_h_node_emb_i], dim=1)
+                sim_t_t_his = self.leakyrelu(torch.exp(-delta_t * d_time_t_i) * torch.mm(a_input, self.a))
+            else:
+                # a_input = torch.cat([torch.mm(t_node_emb_i, self.W), torch.mm(t_h_node_emb_i, self.W)], dim=1)
+                a_input = torch.cat([t_node_emb_i, t_h_node_emb_i], dim=1)
+                sim_t_t_his = torch.cat([sim_t_t_his,
+                                         self.leakyrelu(torch.exp(-delta_t * d_time_t_i) * torch.mm(a_input, self.a))], dim=1)
 
         att_s_his_s = softmax(sim_s_s_his, dim=1)  # (batch, h)
-        # att_t_his_t = softmax(sim_t_t_his, dim=1)  # (batch, h)
+        att_t_his_t = softmax(sim_t_t_his, dim=1)  # (batch, h)
 
         # s_his_hat_emb_inter = ((att_s_his_s * Variable(s_h_time_mask)).unsqueeze(2) *
         #                        torch.mm(s_h_node_emb.view(s_h_node_emb.size()[0] * self.hist_len, -1), self.W).
@@ -214,25 +210,30 @@ class MMDNE(nn.Module):
         # global_att_t = global_att[:, 1]
         # self.global_attention = global_att
 
+
+        ## Compute the intensity lambda of positive (truely occurred) events
         p_mu = self.bilinear(s_node_emb, t_node_emb).squeeze(-1)
         p_alpha_s = self.bilinear(s_h_node_emb, t_node_emb.unsqueeze(1).repeat(1, self.hist_len, 1)).squeeze(-1)# batch-size, hist-len, emb-size
 
         aaa = (att_s_his_s * p_alpha_s * torch.exp(delta_s * Variable(d_time_s).to(self.device)) * Variable(s_h_time_mask).to(self.device)).sum(dim=1)
         p_lambda = p_mu + aaa
 
-        # s_n_node_emb = self.get_emb_from_id(s_neg_node,news_id, dim_num=3, dim_size=self.neg_size)
-        t_n_node_emb = self.get_emb_from_id(t_neg_node,news_id,dim_num=3, dim_size=self.neg_size)
+        ## Compute the intensity lambda of negative (did not occur) events
+        s_n_node_emb = self.get_emb_from_id(s_neg_node,news_id, dim_num=3, dim_size=self.neg_size)
+        t_n_node_emb = self.get_emb_from_id(t_neg_node,news_id, dim_num=3, dim_size=self.neg_size)
 
         n_mu_s = self.bilinear(s_node_emb.unsqueeze(1).repeat(1, self.neg_size, 1), t_n_node_emb).squeeze(-1)  # (batch, neg_len)
-        # n_mu_t = self.bilinear(t_node_emb.unsqueeze(1).repeat(1, self.neg_size, 1), s_n_node_emb).squeeze(-1)
+        n_mu_t = self.bilinear(t_node_emb.unsqueeze(1).repeat(1, self.neg_size, 1), s_n_node_emb).squeeze(-1)
 
         n_alpha_s = self.bilinear(s_h_node_emb.unsqueeze(2).repeat(1, 1, self.neg_size, 1),
                                   t_n_node_emb.unsqueeze(1).repeat(1, self.hist_len, 1, 1)).squeeze(-1)
-        # n_alpha_t = self.bilinear(t_h_node_emb.unsqueeze(2).repeat(1, 1, self.neg_size, 1),
-        #                           s_n_node_emb.unsqueeze(1).repeat(1, self.hist_len, 1, 1)).squeeze(-1)
+        n_alpha_t = self.bilinear(t_h_node_emb.unsqueeze(2).repeat(1, 1, self.neg_size, 1),
+                                  s_n_node_emb.unsqueeze(1).repeat(1, self.hist_len, 1, 1)).squeeze(-1)
 
         n_lambda_s = n_mu_s + (att_s_his_s.unsqueeze(2) * n_alpha_s * (torch.exp(delta_s * Variable(d_time_s).to(self.device)).unsqueeze(2))
                                * (Variable(s_h_time_mask).unsqueeze(2)).to(self.device)).sum(dim=1)  # TODO: global_att_s.unsqueeze(1)
+        n_lambda_t = n_mu_t + (att_t_his_t.unsqueeze(2) * n_alpha_t * (torch.exp(delta_t * Variable(d_time_t).to(self.device)).unsqueeze(2))
+                               * (Variable(t_h_time_mask).unsqueeze(2)).to(self.device)).sum(dim=1)
 
         # n_lambda_s = n_mu_s \
         #              + global_att_s.unsqueeze(1) * (att_s_his_s.unsqueeze(2) * n_alpha_s
@@ -244,23 +245,23 @@ class MMDNE(nn.Module):
         #                                             * (torch.exp(delta_t * Variable(d_time_t)).unsqueeze(2))
         #                                             * (Variable(t_h_time_mask).unsqueeze(2))).sum(dim=1)
 
-        return p_lambda, n_lambda_s#, n_lambda_t  # max p_lambda, min n_lambda
+        return p_lambda, n_lambda_s, n_lambda_t  # max p_lambda, min n_lambda
 
-    def global_forward(self, s_nodes, t_nodes, e_times, node_sum,news_id):
+    def global_forward(self, s_nodes, t_nodes, event_time, node_sum,news_id):
         # print('self.theta',self.theta, 'self.zeta',self.zeta, 'self.gamma',self.gamma,)
         s_node_emb = self.get_emb_from_id(s_nodes,news_id,dim_num=2)
         t_node_emb = self.get_emb_from_id(t_nodes,news_id,dim_num=2)
 
         beta = torch.sigmoid(self.bilinear(s_node_emb, t_node_emb)).squeeze(-1) # (batch) Equation-11 torch.sigmoid
-        e_times = Variable(e_times).abs().to(self.device)+1e-5
-        r_t = beta / torch.pow(e_times, self.theta)
+        event_time = Variable(event_time).abs().to(self.device)+1e-5
+        r_t = beta / torch.pow(event_time, self.theta)
         node_sum = Variable(node_sum).abs().to(self.device)
         # delta_e_pred must be non-negative; node_sum-1
         delta_e_pred = torch.relu( r_t * node_sum * (self.zeta * torch.pow(node_sum, self.gamma))) # Equation-10
 
         if torch.isnan(delta_e_pred).any():
-            print('beta',beta,'e_times',e_times,'self.theta',self.theta,
-                  'torch.pow(e_times, self.theta)',torch.pow(e_times, self.theta),
+            print('beta',beta,'event_time',event_time,'self.theta',self.theta,
+                  'torch.pow(event_time, self.theta)',torch.pow(event_time, self.theta),
                   'node_sum',node_sum,
                   'self.zeta',self.zeta, 'self.gamma',self.gamma,
                   'torch.pow(node_sum, self.gamma)', torch.pow(node_sum, self.gamma)
@@ -268,25 +269,25 @@ class MMDNE(nn.Module):
             assert(not torch.isnan(delta_e_pred).any())
         return delta_e_pred
 
-    def local_loss(self, s_nodes, t_nodes, e_times,
+    def local_loss(self, s_nodes, t_nodes, event_time,
                    s_h_nodes, s_h_times, s_h_time_mask,
                    t_h_nodes, t_h_times, t_h_time_mask,
                    neg_s_node,neg_t_node,news_id):
 
-        p_lambdas, n_lambdas_s = self.local_forward(s_nodes, t_nodes, e_times,
+        p_lambdas, n_lambdas_s, n_lambdas_t = self.local_forward(s_nodes, t_nodes, event_time,
                                                                  s_h_nodes, s_h_times, s_h_time_mask,
                                                                  t_h_nodes, t_h_times, t_h_time_mask,
                                                                  neg_s_node, neg_t_node,news_id)
 
         aaa  =  - torch.log(p_lambdas.sigmoid() + 1e-5)
         bbb = - torch.log(n_lambdas_s.neg().sigmoid() + 1e-5).sum(dim=1)
-        # ccc = - torch.log(n_lambdas_t.neg().sigmoid() + 1e-5).sum(dim=1)
-        loss =  aaa + bbb #+ ccc # remove the history of t_node, i.e., ccc
+        ccc = - torch.log(n_lambdas_t.neg().sigmoid() + 1e-5).sum(dim=1)
+        loss =  aaa + bbb + ccc # remove the history of t_node, i.e., ccc
 
         return loss
 
-    def global_loss(self,s_nodes, t_nodes, e_times, delta_e_true, node_sum,news_id):
-        delta_e_pred = self.global_forward(s_nodes, t_nodes, e_times, node_sum,news_id)
+    def global_loss(self,s_nodes, t_nodes, event_time, delta_e_true, node_sum,news_id):
+        delta_e_pred = self.global_forward(s_nodes, t_nodes, event_time, node_sum,news_id)
         criterion = torch.nn.MSELoss()
 
         loss = criterion(torch.log(delta_e_pred + 1e-5), torch.log(Variable(delta_e_true).to(self.device) + 1e-5))
@@ -330,7 +331,7 @@ class MMDNE(nn.Module):
         vera_loss = criterion(output, y)
         return vera_loss
 
-    def update(self, s_nodes, t_nodes, e_times,
+    def update(self, s_nodes, t_nodes, event_time,
                s_h_nodes, s_h_times, s_h_time_mask,
                t_h_nodes, t_h_times, t_h_time_mask,
                neg_s_node,neg_t_node,
@@ -339,16 +340,16 @@ class MMDNE(nn.Module):
 
         ## XXX ##
         max_d_time = self.max_d_time_dict[news_id]
-        e_times = e_times/max_d_time
+        event_time = event_time/max_d_time
         s_h_times = s_h_times/max_d_time
         t_h_times = t_h_times/max_d_time
 
-        local_loss = self.local_loss(s_nodes, t_nodes, e_times,
+        local_loss = self.local_loss(s_nodes, t_nodes, event_time,
                                      s_h_nodes, s_h_times, s_h_time_mask,
                                      t_h_nodes, t_h_times, t_h_time_mask,
                                      neg_s_node, neg_t_node,news_id)
 
-        global_loss, delta_e_pred = self.global_loss(s_nodes, t_nodes, e_times,
+        global_loss, delta_e_pred = self.global_loss(s_nodes, t_nodes, event_time,
                                       delta_e_true, node_sum,news_id)
         vera_loss = self.veracity_loss(news_id)
 
@@ -359,4 +360,4 @@ class MMDNE(nn.Module):
 
         loss = weighted_local_loss + weighted_vera_loss + weighted_global_loss
 
-        return loss, weighted_local_loss, weighted_global_loss, weighted_vera_loss, delta_e_pred, e_times, delta_e_true
+        return loss, weighted_local_loss, weighted_global_loss, weighted_vera_loss, delta_e_pred, event_time, delta_e_true

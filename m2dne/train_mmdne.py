@@ -102,7 +102,7 @@ def forward_per_graph(news_id):
         # str
         # print(iii)
         optim.zero_grad()
-        batch_loss, batch_local_loss, batch_global_loss, batch_vera_loss, delta_e_pred, e_times, delta_e_true = \
+        batch_loss, batch_local_loss, batch_global_loss, batch_vera_loss, delta_e_pred, event_time, delta_e_true = \
             mmdne.update(sample_batched['source_node'],
                          sample_batched['target_node'],
                          sample_batched['event_time'].type(FType),
@@ -130,7 +130,7 @@ def forward_per_graph(news_id):
         graph_global_loss += batch_global_loss
         graph_vera_loss += batch_vera_loss
 
-    return graph_loss, graph_local_loss, graph_global_loss, graph_vera_loss, num_datapoints, delta_e_pred, e_times, delta_e_true
+    return graph_loss, graph_local_loss, graph_global_loss, graph_vera_loss, num_datapoints, delta_e_pred, event_time, delta_e_true
 
 def train_func(mmdne, optim):
     total_graph_loss = 0
@@ -157,7 +157,7 @@ def train_func(mmdne, optim):
             # graph_batch_loss, graph_batch_local_loss, graph_batch_global_loss, graph_batch_vera_loss = \
             #     pool.map(forward_per_graph, batch_news_id_list)
             graph_num += 1
-            graph_loss, graph_local_loss, graph_global_loss, graph_vera_loss, num_datapoints, delta_e_pred, e_times, delta_e_true = \
+            graph_loss, graph_local_loss, graph_global_loss, graph_vera_loss, num_datapoints, delta_e_pred, event_time, delta_e_true = \
                 forward_per_graph(news_id)
 
             total_graph_loss += graph_loss
@@ -298,10 +298,10 @@ def eval_temporal_pred(mmdne, news_id_consider):
 
     with torch.no_grad():
         for _, news_id in enumerate(eval_news_id_list):
-            graph_loss, graph_local_loss, graph_global_loss, graph_vera_loss, num_datapoints, delta_e_pred, e_times, delta_e_true = \
+            graph_loss, graph_local_loss, graph_global_loss, graph_vera_loss, num_datapoints, delta_e_pred, event_time, delta_e_true = \
                 forward_per_graph(news_id)
 
-            # eval_forecasting(delta_e_pred, e_times, delta_e_true)
+            # eval_forecasting(delta_e_pred, event_time, delta_e_true)
 
             total_graph_loss += graph_loss.detach().cpu().numpy()
             total_graph_local_loss += graph_local_loss.detach().cpu().numpy()
@@ -311,8 +311,8 @@ def eval_temporal_pred(mmdne, news_id_consider):
 
     return total_graph_loss, total_graph_local_loss, total_graph_global_loss, total_graph_vera_loss, total_num_datapoints
 
-def eval_forecasting(delta_e_pred, e_times, delta_e_true):
-    timestamps = e_times
+def eval_forecasting(delta_e_pred, event_time, delta_e_true):
+    timestamps = event_time
     for i in delta_e_pred:
         if not delta_e_pred[0]:
             delta_e_pred[i] += delta_e_pred[i-1]
