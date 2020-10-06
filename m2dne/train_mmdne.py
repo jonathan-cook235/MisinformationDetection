@@ -34,7 +34,7 @@ parser.add_argument('--optimizer', choices=["Adam", "SGD"],
                     help='optimizer', default="Adam")
 parser.add_argument('--learning_rate', default=1e-3, type=float,
                     help='learning rate')
-parser.add_argument('--l2', default=1e-2, type=float,
+parser.add_argument('--l2', default=1e-3, type=float,
                     help='L2 regularization')
 parser.add_argument('--epoch_num', default=100, type=int,
                     help='Number of epochs')
@@ -42,8 +42,8 @@ parser.add_argument('--save_epochs', default=10, type=int,
                     help='Save every some number of epochs')
 parser.add_argument('--batch_size', default=512, type=int,
                     help='Batch_size')
-parser.add_argument('--emb_size', default=128, type=int,
-                    help='embedding_size')#64
+parser.add_argument('--emb_size', default=64, type=int,
+                    help='embedding_size')
 parser.add_argument('--only_binary', action='store_true',
                     help='Reduces the problem to binary classification')
 parser.add_argument('--neg_size', default=8, type=int,
@@ -59,14 +59,15 @@ parser.add_argument('--time_cutoff',
 parser.add_argument('--seed', default=64, type=int,
                     help='Seed for train/val/test split')
 parser.add_argument('--patience', type=int, default=3, help='Patience for early stopping')
-parser.add_argument('--dropout', type=float, default=0.3, help='Dropout probability')
+parser.add_argument('--dropout', type=float, default=0.1, help='Dropout probability')
 parser.add_argument('--epsilon', type=float, default=10, help='veracity loss co-efficient')
 parser.add_argument('--epsilon1', type=float, default=1, help='local loss co-efficient')
 parser.add_argument('--epsilon2', type=float, default=0.1, help='global loss co-efficient')
+parser.add_argument('--epsilon3', type=float, default=10, help='timestamp loss co-efficient')
 parser.add_argument('--enable_cuda', type=bool, default=True,
                     help='whether to use gpu')
 parser.add_argument('--gpu', type=int, default=1, help='Idx for the gpu to use')
-parser.add_argument('--backprop_every', type=int, default=50,
+parser.add_argument('--backprop_every', type=int, default=10,
                     help='Every how many batches to backprop')
 args = parser.parse_args()
 print(args)
@@ -94,6 +95,7 @@ def forward_per_graph(news_id):
     graph_local_loss = 0
     graph_global_loss = 0
     graph_vera_loss = 0
+    graph_time_loss = 0
 
     graph_data = mmdne.graph_data_dict[news_id]
     num_datapoints = len(graph_data)
@@ -102,7 +104,7 @@ def forward_per_graph(news_id):
         # str
         # print(iii)
         optim.zero_grad()
-        batch_loss, batch_local_loss, batch_global_loss, batch_vera_loss, delta_e_pred, event_time, delta_e_true = \
+        batch_loss, batch_local_loss, batch_global_loss, batch_vera_loss, batch_time_loss, delta_e_pred, event_time, delta_e_true = \
             mmdne.update(sample_batched['source_node'],
                          sample_batched['target_node'],
                          sample_batched['event_time'].type(FType),
@@ -129,14 +131,17 @@ def forward_per_graph(news_id):
         graph_local_loss += batch_local_loss
         graph_global_loss += batch_global_loss
         graph_vera_loss += batch_vera_loss
+        graph_time_loss += batch_time_loss
 
-    return graph_loss, graph_local_loss, graph_global_loss, graph_vera_loss, num_datapoints, delta_e_pred, event_time, delta_e_true
+    return graph_loss, graph_local_loss, graph_global_loss, graph_vera_loss, graph_time_loss, \
+           num_datapoints, delta_e_pred, event_time, delta_e_true
 
 def train_func(mmdne, optim):
     total_graph_loss = 0
     total_graph_local_loss = 0
     total_graph_global_loss = 0
     total_graph_vera_loss = 0
+    total_graph_time_loss = 0
     total_num_datapoints = 0
 
     news_id_list = list(mmdne.graph_data_dict.keys())
@@ -157,13 +162,15 @@ def train_func(mmdne, optim):
             # graph_batch_loss, graph_batch_local_loss, graph_batch_global_loss, graph_batch_vera_loss = \
             #     pool.map(forward_per_graph, batch_news_id_list)
             graph_num += 1
-            graph_loss, graph_local_loss, graph_global_loss, graph_vera_loss, num_datapoints, delta_e_pred, event_time, delta_e_true = \
+            graph_loss, graph_local_loss, graph_global_loss, graph_vera_loss, graph_time_loss, \
+            num_datapoints, delta_e_pred, event_time, delta_e_true = \
                 forward_per_graph(news_id)
 
             total_graph_loss += graph_loss
             total_graph_local_loss += graph_local_loss
             total_graph_global_loss += graph_global_loss
             total_graph_vera_loss += graph_vera_loss
+            total_graph_time_loss += graph_time_loss
             total_num_datapoints += num_datapoints
 
             if graph_num % mmdne.backprop_every == 0: # itrate 10 grahs
@@ -175,16 +182,19 @@ def train_func(mmdne, optim):
                       'avg loss = {:.5f}, '
                       'avg local loss = {:.5f}, '
                       'avg global loss = {:.5f}, '
+                      'avg time loss = {:.5f}, '
                       'avg veracity loss = {:.5f}'.format(epoch, graph_num,
                                                   total_graph_loss.detach().cpu().numpy() / mmdne.backprop_every,
-                                                  total_graph_local_loss.detach().cpu().numpy() / mmdne.backprop_every,
-                                                  total_graph_global_loss.detach().cpu().numpy() / mmdne.backprop_every,
-                                                  total_graph_vera_loss.detach().cpu().numpy() / mmdne.backprop_every))
+                                                  total_graph_local_loss/ mmdne.backprop_every,
+                                                  total_graph_global_loss / mmdne.backprop_every,
+                                                  total_graph_time_loss / mmdne.backprop_every,
+                                                  total_graph_vera_loss / mmdne.backprop_every))
 
                 total_graph_loss = 0
                 total_graph_local_loss = 0
                 total_graph_global_loss = 0
                 total_graph_vera_loss = 0
+                total_graph_time_loss = 0
                 total_num_datapoints = 0
 
         if epoch % args.save_epochs == 0:
@@ -203,23 +213,27 @@ def train_func(mmdne, optim):
 def eval_func(mmdne, best_eval_acc=0, cum_times = 0):
     mmdne.eval()
     print('#############################################')
-    val_loss, val_local_loss, val_global_loss, val_vera_loss, val_num_datapoints = \
+    val_loss, val_local_loss, val_global_loss, val_vera_loss,val_time_loss, val_num_datapoints = \
         eval_temporal_pred(mmdne, mmdne.val_ids)
     print('\tValdation: avg loss = {:.5f}, '
           'avg local loss = {:.5f}, '
           'avg global loss = {:.5f}, '
+          'avg time loss = {:.5f}, '
           'avg veracity loss = {:.5f}\n'.format(val_loss / len(mmdne.val_ids),
                                                 val_local_loss / len(mmdne.val_ids),
                                                 val_global_loss / len(mmdne.val_ids),
+                                                val_time_loss / len(mmdne.val_ids),
                                                 val_vera_loss / len(mmdne.val_ids)))
-    test_loss, test_local_loss, test_global_loss, test_vera_loss, test_num_datapoints = \
+    test_loss, test_local_loss, test_global_loss, test_vera_loss, test_time_loss, test_num_datapoints = \
         eval_temporal_pred(mmdne, mmdne.test_ids)
     print('\tTest: avg loss = {:.5f}, '
           'avg local loss = {:.5f}, '
           'avg global loss = {:.5f}, '
+          'avg time loss = {:.5f}, '
           'avg veracity loss = {:.5f}\n'.format(test_loss / len(mmdne.test_ids),
                                                 test_local_loss / len(mmdne.test_ids),
                                                 test_global_loss / len(mmdne.test_ids),
+                                                test_time_loss / len(mmdne.test_ids),
                                                 test_vera_loss / len(mmdne.test_ids)))
     # Evaluate veracity classification
     train_acc, train_correct, train_n_graphs = eval_veracity_func(mmdne, mmdne.train_ids)
@@ -242,7 +256,6 @@ def eval_func(mmdne, best_eval_acc=0, cum_times = 0):
         cum_times += 1
 
     return best_eval_acc, cum_times
-
 
 def eval_veracity_func(mmdne, news_id_consider):
 
@@ -294,22 +307,26 @@ def eval_temporal_pred(mmdne, news_id_consider):
     total_graph_local_loss = 0
     total_graph_global_loss = 0
     total_graph_vera_loss = 0
+    total_graph_time_loss = 0
     total_num_datapoints = 0
 
     with torch.no_grad():
         for _, news_id in enumerate(eval_news_id_list):
-            graph_loss, graph_local_loss, graph_global_loss, graph_vera_loss, num_datapoints, delta_e_pred, event_time, delta_e_true = \
+            graph_loss, graph_local_loss, graph_global_loss, graph_vera_loss, graph_time_loss,\
+            num_datapoints, delta_e_pred, event_time, delta_e_true = \
                 forward_per_graph(news_id)
 
             # eval_forecasting(delta_e_pred, event_time, delta_e_true)
 
             total_graph_loss += graph_loss.detach().cpu().numpy()
-            total_graph_local_loss += graph_local_loss.detach().cpu().numpy()
-            total_graph_global_loss += graph_global_loss.detach().cpu().numpy()
-            total_graph_vera_loss += graph_vera_loss.detach().cpu().numpy()
+            total_graph_local_loss += graph_local_loss
+            total_graph_global_loss += graph_global_loss
+            total_graph_vera_loss += graph_vera_loss
+            total_graph_time_loss += graph_time_loss
             total_num_datapoints += num_datapoints
 
-    return total_graph_loss, total_graph_local_loss, total_graph_global_loss, total_graph_vera_loss, total_num_datapoints
+    return total_graph_loss, total_graph_local_loss, total_graph_global_loss, \
+           total_graph_vera_loss, total_graph_time_loss, total_num_datapoints
 
 def eval_forecasting(delta_e_pred, event_time, delta_e_true):
     timestamps = event_time
@@ -339,6 +356,7 @@ if __name__ == '__main__':
                   # optim=args.optimizer,
                   epsilon1=args.epsilon1,
                   epsilon2=args.epsilon2,
+                  epsilon3 = args.epsilon3,
                   epsilon=args.epsilon,
                   backprop_every = args.backprop_every,
                   device=device,

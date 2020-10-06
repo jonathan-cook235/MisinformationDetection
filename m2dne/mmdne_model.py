@@ -30,7 +30,7 @@ class MMDNE(nn.Module):
                  batch_size=1000, epoch_num=1,
                  only_binary=True,seed=64, backprop_every = 10,
                  tlp_flag=False, trend_prediction=False,device='cpu',gpu=-1,
-                 epsilon=1.0, epsilon1=1.0,epsilon2=1.0, dropout=0.5
+                 epsilon=1.0, epsilon1=1.0,epsilon2=1.0, epsilon3=1.0, dropout=0.5
     ):
         super(MMDNE, self).__init__()
         self.emb_size = emb_size
@@ -53,6 +53,7 @@ class MMDNE(nn.Module):
         self.epsilon = epsilon
         self.epsilon1=epsilon1
         self.epsilon2=epsilon2
+        self.epsilon3 = epsilon3
 
         if self.only_binary:
             self.output_dim = 2
@@ -77,6 +78,7 @@ class MMDNE(nn.Module):
             self.zeta = Variable((torch.ones(1)).type(FType).cuda(self.gpu), requires_grad=True)
             self.gamma = Variable((torch.ones(1)).type(FType).cuda(self.gpu), requires_grad=True)
             self.theta = Variable((torch.ones(1)).type(FType).cuda(self.gpu), requires_grad=True)
+            self.time_W = Variable((torch.ones(1)).type(FType).cuda(self.gpu), requires_grad=True)
         else:
             self.delta_s = Variable((torch.ones(1)).type(FType), requires_grad=True)
             self.delta_t = Variable((torch.ones(1)).type(FType), requires_grad=True)
@@ -84,6 +86,7 @@ class MMDNE(nn.Module):
             self.zeta = Variable((torch.ones(1)).type(FType), requires_grad=True)
             self.gamma = Variable((torch.ones(1)).type(FType), requires_grad=True)
             self.theta = Variable((torch.ones(1)).type(FType), requires_grad=True)
+            self.time_W = Variable((torch.ones(1)).type(FType), requires_grad=True)
 
 
         self.a = torch.nn.Parameter(torch.zeros(size=(2 * self.emb_size, 1)),requires_grad=True)
@@ -91,25 +94,23 @@ class MMDNE(nn.Module):
         torch.nn.init.xavier_uniform_(self.a.data, gain=1.414)
 
         # self.fts2emb = nn.Linear(self.num_user_features, self.emb_size) #usage: y = self.fts2emb(x)
-        self.fts2emb = nn.Linear(self.num_user_features+self.num_tweet_features, self.emb_size) #usage: y = self.fts2emb(x)
-        self.bilinear = nn.Bilinear(self.emb_size, self.emb_size, 1)
-        self.aggre_emb = nn.Linear(3*self.emb_size, self.emb_size)
-        self.node_emb_output = nn.Linear(self.emb_size, self.output_dim)
-        # self.node_emb_output1 = nn.Linear(self.emb_size, int(self.emb_size//4))
-        # self.node_emb_output2 = nn.Linear(int(self.emb_size//4), self.output_dim)
-
+        self.fts2emb = nn.Linear(self.num_user_features+self.num_tweet_features, self.emb_size, bias=True) #usage: y = self.fts2emb(x)
+        self.bilinear = nn.Bilinear(self.emb_size, self.emb_size, 1, bias=True)
+        self.aggre_emb = nn.Linear(3*self.emb_size, self.emb_size, bias=True)
+        self.node_emb_output = nn.Linear(self.emb_size, self.output_dim, bias=True)
         # p – probability of an element to be zeroed
         self.dropout_layer = nn.Dropout(self.dropout)
-        self.leakyrelu = torch.nn.LeakyReLU(0.2)  # alpha =0.2 for leakyrelu
-        self.softplus = torch.nn.Softplus(beta=10.)
 
-        self.para_to_opt = [self.delta_s, self.delta_t, self.zeta,self.gamma,self.theta, self.a] \
+        # self.leakyrelu = torch.nn.LeakyReLU(0.2)  # alpha =0.2 for leakyrelu
+        self.softplus = torch.nn.Softplus(beta=10.)
+        self.MSE_criterion = torch.nn.MSELoss()
+        self.CE_criterion = torch.nn.CrossEntropyLoss()
+
+        self.para_to_opt = [self.delta_s, self.delta_t, self.zeta,self.gamma,self.theta, self.a, self.time_W] \
                            + list(self.fts2emb.parameters()) \
                            + list(self.bilinear.parameters()) \
                            + list(self.aggre_emb.parameters()) \
-                           + list(self.node_emb_output.parameters()) \
-                           # + list(self.node_emb_output1.parameters()) \
-                           # + list(self.node_emb_output2.parameters()) \
+                           + list(self.node_emb_output.parameters())
 
     def get_emb_from_id(self, user_id, news_id, dim_num=1, dim_size=None):
 
@@ -144,7 +145,7 @@ class MMDNE(nn.Module):
         node_emb = self.fts2emb(node_fts)  # (bach, emb_dim)
         return node_emb
 
-    def local_forward(self, s_nodes, t_nodes, event_time,
+    def compute_intensity(self, s_nodes, t_nodes, event_time,
                       s_h_nodes, s_h_times, s_h_time_mask,
                       t_h_nodes, t_h_times, t_h_time_mask,
                       s_neg_node,t_neg_node,news_id):
@@ -152,7 +153,7 @@ class MMDNE(nn.Module):
         s_node_emb = self.get_emb_from_id(s_nodes,news_id, dim_num=2)
         t_node_emb = self.get_emb_from_id(t_nodes,news_id, dim_num=2)
         s_h_node_emb = self.get_emb_from_id(s_h_nodes,news_id, dim_num=3, dim_size=self.hist_len)
-        t_h_node_emb = self.get_emb_from_id(t_h_nodes,news_id, dim_num=3,dim_size=self.hist_len)
+        t_h_node_emb = self.get_emb_from_id(t_h_nodes,news_id, dim_num=3, dim_size=self.hist_len)
 
         delta_s = self.delta_s#.index_select(0, Variable(s_nodes.view(-1))).unsqueeze(1)  # (b,1)
         d_time_s = torch.abs(event_time.unsqueeze(1) - s_h_times)  # (batch, hist_len)
@@ -263,31 +264,35 @@ class MMDNE(nn.Module):
                    t_h_nodes, t_h_times, t_h_time_mask,
                    neg_s_node,neg_t_node,news_id):
 
-        p_lambdas, n_lambdas_s = self.local_forward(s_nodes, t_nodes, event_time,
+        p_lambdas, n_lambdas_s = self.compute_intensity(s_nodes, t_nodes, event_time,
                                                                  s_h_nodes, s_h_times, s_h_time_mask,
                                                                  t_h_nodes, t_h_times, t_h_time_mask,
                                                                  neg_s_node, neg_t_node,news_id)
 
+        ## Compute the Negative Log-Likelihood as Equation 14 in MMDNE
         aaa  =  - torch.log(p_lambdas.sigmoid() + 1e-5)
         bbb = - torch.log(n_lambdas_s.neg().sigmoid() + 1e-5).sum(dim=1)
         # ccc = - torch.log(n_lambdas_t.neg().sigmoid() + 1e-5).sum(dim=1)
-        loss =  aaa + bbb #+ ccc # remove the history of t_node, i.e., ccc
+        local_loss =  aaa + bbb #+ ccc # remove the history of t_node, i.e., ccc
 
-        return loss
+        ## Compute the error of timstamp prediction
+        estimate_timestamp = self.timestamp_predict(intensity=p_lambdas)
+        timestamp_loss = self.MSE_criterion(torch.exp(estimate_timestamp), torch.exp(event_time))
+
+        return local_loss, timestamp_loss
 
     def global_loss(self,s_nodes, t_nodes, event_time, delta_e_true, node_sum,news_id):
         delta_e_pred = self.global_forward(s_nodes, t_nodes, event_time, node_sum,news_id)
-        criterion = torch.nn.MSELoss()
 
-        loss = criterion(torch.log(delta_e_pred + 1e-5), torch.log(Variable(delta_e_true).to(self.device) + 1e-5))
+        global_loss = self.MSE_criterion(torch.log(delta_e_pred + 1e-5), torch.log(delta_e_true))
         # loss = ((delta_e_pred - Variable(delta_e_true))**2).mean(dim=-1)
-        if torch.isnan(loss):
+        if torch.isnan(global_loss):
             print('delta_e_pred',delta_e_pred, 'delta_e_true',delta_e_true,
                   'torch.log(delta_e_pred + 1e-5)',torch.log(delta_e_pred + 1e-5),
                   'torch.log(Variable(delta_e_true) + 1e-5)',torch.log(Variable(delta_e_true).to(self.device) + 1e-5),
-                  'loss',loss)
-            assert (not torch.isnan(loss))
-        return loss, delta_e_pred
+                  'loss',global_loss)
+            assert (not torch.isnan(global_loss))
+        return global_loss, delta_e_pred
 
     def veracity_predict(self, news_id):
 
@@ -314,27 +319,30 @@ class MMDNE(nn.Module):
     def veracity_loss(self, news_id):
         output = self.veracity_predict(news_id)
 
-        criterion = torch.nn.CrossEntropyLoss()
         label = self.labels[news_id]
         y = torch.tensor(to_label(label)).to(self.device)
-        vera_loss = criterion(output, y)
+        vera_loss = self.CE_criterion(output, y)
         return vera_loss
 
     def timestamp_predict(self, intensity, print_info=False):
-        timestep = 1e-4
-        integral_ = torch.cumsum(timestep * intensity, dim=0)
+        timestep = 1e-8
+        # integral_ = torch.cumsum(timestep * intensity, dim=0)
+        integral_ = intensity
         # density for the time-until-next-event law
         density = intensity * torch.exp(-integral_)
         # Check density
         if print_info:
             print("sum of density:", (timestep * density).sum())
 
-        n_samples = 100
-        max_timestamp =  1 # after normalization
-        dt_vals = torch.linspace(0, max_timestamp, n_samples + 1).to(self.device)
-        t_pit = dt_vals * density  # integrand for the time estimator
+        # n_samples = 1000
+        # max_timestamp =  1 # after normalization
+        # dt_vals = torch.linspace(0, max_timestamp, n_samples + 1).to(self.device)
+        # t_pit = dt_vals * density  # integrand for the time estimator
         # trapeze method
-        estimate_dt = (timestep * 0.5 * (t_pit[1:] + t_pit[:-1])).sum()
+        # estimate_dt = (timestep * 0.5 * (t_pit[1:] + t_pit[:-1])).sum()
+        estimate_timestamp = density * self.time_W
+
+        return estimate_timestamp
 
     def update(self, s_nodes, t_nodes, event_time,
                s_h_nodes, s_h_times, s_h_time_mask,
@@ -349,7 +357,7 @@ class MMDNE(nn.Module):
         s_h_times = s_h_times/max_timestamp
         t_h_times = t_h_times/max_timestamp
 
-        local_loss = self.local_loss(s_nodes, t_nodes, event_time,
+        local_loss, timestamp_loss = self.local_loss(s_nodes, t_nodes, event_time,
                                      s_h_nodes, s_h_times, s_h_time_mask,
                                      t_h_nodes, t_h_times, t_h_time_mask,
                                      neg_s_node, neg_t_node,news_id)
@@ -361,8 +369,13 @@ class MMDNE(nn.Module):
         weighted_local_loss = self.epsilon1 * local_loss.mean()
         # weighted_global_loss = weighted_local_loss
         weighted_global_loss = self.epsilon2 * global_loss.mean()
+        weighted_timestamp_loss = self.epsilon3 * timestamp_loss.mean()
         weighted_vera_loss = self.epsilon * vera_loss
 
-        loss = weighted_local_loss + weighted_vera_loss + weighted_global_loss
+        loss = weighted_local_loss + weighted_vera_loss + weighted_global_loss + weighted_timestamp_loss
 
-        return loss, weighted_local_loss, weighted_global_loss, weighted_vera_loss, delta_e_pred, event_time, delta_e_true
+        return loss, weighted_local_loss.detach().cpu().numpy(), \
+               weighted_global_loss.detach().cpu().numpy(),\
+               weighted_vera_loss.detach().cpu().numpy(),\
+               weighted_timestamp_loss.detach().cpu().numpy(),\
+               delta_e_pred, event_time, delta_e_true
