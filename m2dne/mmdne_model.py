@@ -101,6 +101,7 @@ class MMDNE(nn.Module):
         # p – probability of an element to be zeroed
         self.dropout_layer = nn.Dropout(self.dropout)
         self.leakyrelu = torch.nn.LeakyReLU(0.2)  # alpha =0.2 for leakyrelu
+        self.softplus = torch.nn.Softplus(beta=10.)
 
         self.para_to_opt = [self.delta_s, self.delta_t, self.zeta,self.gamma,self.theta, self.a] \
                            + list(self.fts2emb.parameters()) \
@@ -166,31 +167,29 @@ class MMDNE(nn.Module):
             s_node_emb_i = s_node_emb  # (b, dim)
             d_time_s_i = Variable(d_time_s)[:,i:(i+1)].to(self.device)
             if i == 0:
-                # a_input = torch.cat([torch.mm(s_node_emb_i, self.W),torch.mm(s_h_node_emb_i, self.W)],dim=1)  # (b, 2*dim)
                 a_input = torch.cat([s_node_emb_i, s_h_node_emb_i],dim=1)  # (b, 2*dim)
-                sim_s_s_his = self.leakyrelu(torch.exp(-delta_s * d_time_s_i) * torch.mm(a_input, self.a))  # (b.dim)
+                sim_s_s_his = self.softplus(torch.exp(-delta_s * d_time_s_i) * torch.mm(a_input, self.a))  # (b.dim),leakyrelu
             else:
-                # a_input = torch.cat([torch.mm(s_node_emb_i, self.W),torch.mm(s_h_node_emb_i, self.W)],dim=1)
                 a_input = torch.cat([s_node_emb_i, s_h_node_emb_i], dim=1)
                 sim_s_s_his = torch.cat([sim_s_s_his,
-                                         self.leakyrelu(torch.exp(-delta_s * d_time_s_i) * torch.mm(a_input, self.a))], dim=1)
+                                         self.softplus(torch.exp(-delta_s * d_time_s_i) * torch.mm(a_input, self.a))], dim=1)
 
-        for i in range(self.hist_len):
-            t_h_node_emb_i = torch.transpose(t_h_node_emb[:, i:(i + 1), :], dim0=1, dim1=2).squeeze()
-            t_node_emb_i = t_node_emb
-            d_time_t_i = Variable(d_time_t)[:, i:(i + 1)].to(self.device)  # (b,1)
-            if i == 0:
-                # a_input = torch.cat([torch.mm(t_node_emb_i, self.W), torch.mm(t_h_node_emb_i, self.W)], dim=1)  # (b, 2*dim)
-                a_input = torch.cat([t_node_emb_i, t_h_node_emb_i], dim=1)
-                sim_t_t_his = self.leakyrelu(torch.exp(-delta_t * d_time_t_i) * torch.mm(a_input, self.a))
-            else:
-                # a_input = torch.cat([torch.mm(t_node_emb_i, self.W), torch.mm(t_h_node_emb_i, self.W)], dim=1)
-                a_input = torch.cat([t_node_emb_i, t_h_node_emb_i], dim=1)
-                sim_t_t_his = torch.cat([sim_t_t_his,
-                                         self.leakyrelu(torch.exp(-delta_t * d_time_t_i) * torch.mm(a_input, self.a))], dim=1)
+        # for i in range(self.hist_len):
+        #     t_h_node_emb_i = torch.transpose(t_h_node_emb[:, i:(i + 1), :], dim0=1, dim1=2).squeeze()
+        #     t_node_emb_i = t_node_emb
+        #     d_time_t_i = Variable(d_time_t)[:, i:(i + 1)].to(self.device)  # (b,1)
+        #     if i == 0:
+        #         # a_input = torch.cat([torch.mm(t_node_emb_i, self.W), torch.mm(t_h_node_emb_i, self.W)], dim=1)  # (b, 2*dim)
+        #         a_input = torch.cat([t_node_emb_i, t_h_node_emb_i], dim=1)
+        #         sim_t_t_his = self.softplus(torch.exp(-delta_t * d_time_t_i) * torch.mm(a_input, self.a))
+        #     else:
+        #         # a_input = torch.cat([torch.mm(t_node_emb_i, self.W), torch.mm(t_h_node_emb_i, self.W)], dim=1)
+        #         a_input = torch.cat([t_node_emb_i, t_h_node_emb_i], dim=1)
+        #         sim_t_t_his = torch.cat([sim_t_t_his,
+        #                                  self.softplus(torch.exp(-delta_t * d_time_t_i) * torch.mm(a_input, self.a))], dim=1)
 
         att_s_his_s = softmax(sim_s_s_his, dim=1)  # (batch, h)
-        att_t_his_t = softmax(sim_t_t_his, dim=1)  # (batch, h)
+        # att_t_his_t = softmax(sim_t_t_his, dim=1)  # (batch, h)
 
         # s_his_hat_emb_inter = ((att_s_his_s * Variable(s_h_time_mask)).unsqueeze(2) *
         #                        torch.mm(s_h_node_emb.view(s_h_node_emb.size()[0] * self.hist_len, -1), self.W).
@@ -212,8 +211,8 @@ class MMDNE(nn.Module):
 
 
         ## Compute the intensity lambda of positive (truely occurred) events
-        p_mu = self.bilinear(s_node_emb, t_node_emb).squeeze(-1)
-        p_alpha_s = self.bilinear(s_h_node_emb, t_node_emb.unsqueeze(1).repeat(1, self.hist_len, 1)).squeeze(-1)# batch-size, hist-len, emb-size
+        p_mu = self.softplus(self.bilinear(s_node_emb, t_node_emb).squeeze(-1))
+        p_alpha_s = self.softplus(self.bilinear(s_h_node_emb, t_node_emb.unsqueeze(1).repeat(1, self.hist_len, 1)).squeeze(-1))# batch-size, hist-len, emb-size
         p_lambda = p_mu + (att_s_his_s * p_alpha_s * torch.exp(delta_s * Variable(d_time_s).to(self.device))
                            * Variable(s_h_time_mask).to(self.device)).sum(dim=1)
 
@@ -221,42 +220,33 @@ class MMDNE(nn.Module):
         s_n_node_emb = self.get_emb_from_id(s_neg_node,news_id, dim_num=3, dim_size=self.neg_size)
         t_n_node_emb = self.get_emb_from_id(t_neg_node,news_id, dim_num=3, dim_size=self.neg_size)
 
-        n_mu_s = self.bilinear(s_node_emb.unsqueeze(1).repeat(1, self.neg_size, 1), t_n_node_emb).squeeze(-1)  # (batch, neg_len)
-        n_mu_t = self.bilinear(t_node_emb.unsqueeze(1).repeat(1, self.neg_size, 1), s_n_node_emb).squeeze(-1)
+        n_mu_s = self.softplus(self.bilinear(s_node_emb.unsqueeze(1).repeat(1, self.neg_size, 1), t_n_node_emb).squeeze(-1))  # (batch, neg_len)
+        # n_mu_t = self.softplus(self.bilinear(t_node_emb.unsqueeze(1).repeat(1, self.neg_size, 1), s_n_node_emb).squeeze(-1))
 
-        n_alpha_s = self.bilinear(s_h_node_emb.unsqueeze(2).repeat(1, 1, self.neg_size, 1),
-                                  t_n_node_emb.unsqueeze(1).repeat(1, self.hist_len, 1, 1)).squeeze(-1)
-        n_alpha_t = self.bilinear(t_h_node_emb.unsqueeze(2).repeat(1, 1, self.neg_size, 1),
-                                  s_n_node_emb.unsqueeze(1).repeat(1, self.hist_len, 1, 1)).squeeze(-1)
+        n_alpha_s = self.softplus(self.bilinear(s_h_node_emb.unsqueeze(2).repeat(1, 1, self.neg_size, 1),
+                                  t_n_node_emb.unsqueeze(1).repeat(1, self.hist_len, 1, 1)).squeeze(-1))
+        # n_alpha_t = self.softplus(self.bilinear(t_h_node_emb.unsqueeze(2).repeat(1, 1, self.neg_size, 1),
+        #                           s_n_node_emb.unsqueeze(1).repeat(1, self.hist_len, 1, 1)).squeeze(-1))
 
         n_lambda_s = n_mu_s + (att_s_his_s.unsqueeze(2) * n_alpha_s * (torch.exp(delta_s * Variable(d_time_s).to(self.device)).unsqueeze(2))
                                * (Variable(s_h_time_mask).unsqueeze(2)).to(self.device)).sum(dim=1)  # TODO: global_att_s.unsqueeze(1)
-        n_lambda_t = n_mu_t + (att_t_his_t.unsqueeze(2) * n_alpha_t * (torch.exp(delta_t * Variable(d_time_t).to(self.device)).unsqueeze(2))
-                               * (Variable(t_h_time_mask).unsqueeze(2)).to(self.device)).sum(dim=1)
+        # n_lambda_t = n_mu_t + (att_t_his_t.unsqueeze(2) * n_alpha_t * (torch.exp(delta_t * Variable(d_time_t).to(self.device)).unsqueeze(2))
+        #                        * (Variable(t_h_time_mask).unsqueeze(2)).to(self.device)).sum(dim=1)
 
-        # n_lambda_s = n_mu_s \
-        #              + global_att_s.unsqueeze(1) * (att_s_his_s.unsqueeze(2) * n_alpha_s
-        #                                             * (torch.exp(delta_s * Variable(d_time_s)).unsqueeze(2))
-        #                                             * (Variable(s_h_time_mask).unsqueeze(2))).sum(dim=1)   # TODO: global_att_s.unsqueeze(1)
-        #
-        # n_lambda_t = n_mu_t \
-        #              + global_att_t.unsqueeze(1) * (att_t_his_t.unsqueeze(2) * n_alpha_t
-        #                                             * (torch.exp(delta_t * Variable(d_time_t)).unsqueeze(2))
-        #                                             * (Variable(t_h_time_mask).unsqueeze(2))).sum(dim=1)
-
-        return p_lambda, n_lambda_s, n_lambda_t  # max p_lambda, min n_lambda
+        return p_lambda, n_lambda_s#, n_lambda_t  # max p_lambda, min n_lambda
 
     def global_forward(self, s_nodes, t_nodes, event_time, node_sum,news_id):
         # print('self.theta',self.theta, 'self.zeta',self.zeta, 'self.gamma',self.gamma,)
         s_node_emb = self.get_emb_from_id(s_nodes,news_id,dim_num=2)
         t_node_emb = self.get_emb_from_id(t_nodes,news_id,dim_num=2)
 
-        beta = torch.sigmoid(self.bilinear(s_node_emb, t_node_emb)).squeeze(-1) # (batch) Equation-11 torch.sigmoid
+        # beta = torch.sigmoid(self.bilinear(s_node_emb, t_node_emb)).squeeze(-1) # (batch) Equation-11 torch.sigmoid
+        beta  = self.softplus(self.bilinear(s_node_emb, t_node_emb)).squeeze(-1)
         event_time = Variable(event_time).abs().to(self.device)+1e-5
         r_t = beta / torch.pow(event_time, self.theta)
         node_sum = Variable(node_sum).abs().to(self.device)
         # delta_e_pred must be non-negative; node_sum-1
-        delta_e_pred = torch.relu( r_t * node_sum * (self.zeta * torch.pow(node_sum, self.gamma))) # Equation-10
+        delta_e_pred = self.softplus( r_t * node_sum * (self.zeta * torch.pow(node_sum, self.gamma))) # Equation-10
 
         if torch.isnan(delta_e_pred).any():
             print('beta',beta,'event_time',event_time,'self.theta',self.theta,
@@ -273,15 +263,15 @@ class MMDNE(nn.Module):
                    t_h_nodes, t_h_times, t_h_time_mask,
                    neg_s_node,neg_t_node,news_id):
 
-        p_lambdas, n_lambdas_s, n_lambdas_t = self.local_forward(s_nodes, t_nodes, event_time,
+        p_lambdas, n_lambdas_s = self.local_forward(s_nodes, t_nodes, event_time,
                                                                  s_h_nodes, s_h_times, s_h_time_mask,
                                                                  t_h_nodes, t_h_times, t_h_time_mask,
                                                                  neg_s_node, neg_t_node,news_id)
 
         aaa  =  - torch.log(p_lambdas.sigmoid() + 1e-5)
         bbb = - torch.log(n_lambdas_s.neg().sigmoid() + 1e-5).sum(dim=1)
-        ccc = - torch.log(n_lambdas_t.neg().sigmoid() + 1e-5).sum(dim=1)
-        loss =  aaa + bbb + ccc # remove the history of t_node, i.e., ccc
+        # ccc = - torch.log(n_lambdas_t.neg().sigmoid() + 1e-5).sum(dim=1)
+        loss =  aaa + bbb #+ ccc # remove the history of t_node, i.e., ccc
 
         return loss
 
@@ -312,10 +302,10 @@ class MMDNE(nn.Module):
         all_node_emb_max = all_node_emb_max_tpl.values.view(1, -1)  # (1, emb_dim)
         all_node_emb_pool = torch.cat([all_node_emb_mean, all_node_emb_max, first_node_emb], dim=1)
 
-        aggre_emb = self.leakyrelu(self.dropout_layer(self.aggre_emb(all_node_emb_pool)))
-        output_emb = self.leakyrelu(self.dropout_layer(self.node_emb_output(aggre_emb)))
-        # output_emb1 = self.leakyrelu(self.dropout_layer(self.node_emb_output1(aggre_emb)))
-        # output_emb = self.leakyrelu(self.dropout_layer(self.node_emb_output2(output_emb1)))
+        aggre_emb = self.softplus(self.dropout_layer(self.aggre_emb(all_node_emb_pool)))
+        output_emb = self.softplus(self.dropout_layer(self.node_emb_output(aggre_emb)))
+        # output_emb1 = self.softplus(self.dropout_layer(self.node_emb_output1(aggre_emb)))
+        # output_emb = self.softplus(self.dropout_layer(self.node_emb_output2(output_emb1)))
 
         output = F.log_softmax(output_emb, dim=1)
 
