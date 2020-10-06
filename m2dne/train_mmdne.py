@@ -34,6 +34,8 @@ parser.add_argument('--optimizer', choices=["Adam", "SGD"],
                     help='optimizer', default="Adam")
 parser.add_argument('--learning_rate', default=1e-3, type=float,
                     help='learning rate')
+parser.add_argument('--l2', default=1e-2, type=float,
+                    help='L2 regularization')
 parser.add_argument('--epoch_num', default=100, type=int,
                     help='Number of epochs')
 parser.add_argument('--save_epochs', default=10, type=int,
@@ -343,9 +345,9 @@ if __name__ == '__main__':
                   gpu=args.gpu).to(device)
 
     if args.optimizer == 'SGD':
-        optim = SGD(lr=args.learning_rate, momentum=0.9, weight_decay=0.01, params=mmdne.para_to_opt)
+        optim = SGD(lr=args.learning_rate, momentum=0.9, weight_decay=args.l2, params=mmdne.para_to_opt)
     elif args.optimizer == 'Adam':
-        optim = Adam(lr=args.learning_rate, weight_decay=0.05, params=mmdne.para_to_opt)#0.01
+        optim = Adam(lr=args.learning_rate, weight_decay=args.l2, params=mmdne.para_to_opt)#0.01
 
 
     if args.train_mode == 'True':
