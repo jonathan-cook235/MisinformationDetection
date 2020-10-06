@@ -12,11 +12,11 @@ import math, copy
 # from models.embedding.event_type import TypeEmbedding
 # from models.embedding.position import PositionalEmbedding,BiasedPositionalEmbedding
 # from models.embedding.event_embedding import EventEmbedding
-from point_process.multi_head import MultiHeadedAttention
-from point_process.sublayer import SublayerConnection
-from point_process.feed_forward import PositionwiseFeedForward
-from point_process.base import SeqGenerator, predict_from_hidden
-from point_process.gelu import GELU
+from sahp_point_process.multi_head import MultiHeadedAttention
+from sahp_point_process.sublayer import SublayerConnection
+from sahp_point_process.feed_forward import PositionwiseFeedForward
+from sahp_point_process.base import SeqGenerator, predict_from_hidden
+from sahp_point_process.gelu import GELU
 
 from matplotlib import pyplot as plt
 

@@ -1,5 +1,5 @@
 import torch.nn as nn
-from point_process.layer_norm import LayerNorm
+from sahp_point_process.layer_norm import LayerNorm
 
 
 class SublayerConnection(nn.Module):

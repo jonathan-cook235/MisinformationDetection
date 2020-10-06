@@ -1,5 +1,5 @@
 import torch.nn as nn
-from point_process.gelu import GELU
+from sahp_point_process.gelu import GELU
 
 
 class PositionwiseFeedForward(nn.Module):

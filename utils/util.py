@@ -75,6 +75,10 @@ def get_root_id(tree_file_name):
     # return int(os.path.splitext(os.path.basename(tree_file_name))[0])
     return str(os.path.splitext(os.path.basename(tree_file_name))[0])
 
+def get_root_id_int(tree_file_name):
+    return int(os.path.splitext(os.path.basename(tree_file_name))[0])
+    # return str(os.path.splitext(os.path.basename(tree_file_name))[0])
+
 
 
 def get_tree_file_names(datadir):

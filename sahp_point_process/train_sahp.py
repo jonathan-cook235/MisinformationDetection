@@ -7,9 +7,9 @@ from torch import autograd
 import numpy as np
 import random
 
-from point_process.sahp import SAHP
-from point_process.utils import atten_optimizer
-from point_process.utils import util
+from sahp_point_process.sahp import SAHP
+from sahp_point_process.utils import atten_optimizer
+from sahp_point_process.utils import util
 
 def make_sahp_model(nLayers=6, d_model=128, atten_heads=8, dropout=0.1, process_dim=10,
                device = 'cpu', pe='concat', max_sequence_length=4096):

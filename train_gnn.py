@@ -265,7 +265,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Train the graph network.')
     parser.add_argument('--dataset', choices=["twitter15", "twitter16"],
                     help='Training dataset', default="twitter15")
-    parser.add_argument('--lr', default=0.01, type=float,
+    parser.add_argument('--lr', default=0.001, type=float,
                     help='learning rate')
     parser.add_argument('--num_epochs', default=2000, type=int,
                     help='Number of epochs')
@@ -275,13 +275,13 @@ if __name__ == "__main__":
     #                 help='Number of layers')
     # parser.add_argument('--dropout', default=0.0, type=float,
     #                 help='dropout for TGS_stack')
-    parser.add_argument('--graph_type', choices=["static", "dynamic"],default="dynamic",
+    parser.add_argument('--graph_type', choices=["static", "dynamic"],default="static",
                         help='Graph type for propagation modeling')
     parser.add_argument('--model_type', choices=['GCN', 'GAT', 'GraphSage'],default="GCN",
                     help='Model type for TGS_stack')
     parser.add_argument('--batch_size', default=32, type=int,
                     help='Batch_size')
-    parser.add_argument('--only_binary', action='store_true',
+    parser.add_argument('--only_binary', default=True,
                     help='Reduces the problem to binary classification')
     parser.add_argument('--exp_name', default="default",
                     help="Name of experiment - different names will log in different tfboards and restore different models")

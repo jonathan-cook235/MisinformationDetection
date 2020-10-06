@@ -2,7 +2,7 @@ import sys
 sys.path.append("../")
 
 import torch.nn as nn
-from point_process.single import Attention
+from sahp_point_process.single import Attention
 
 
 class MultiHeadedAttention(nn.Module):

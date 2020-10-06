@@ -415,7 +415,7 @@ class DatasetBuilder:
         trees = []
 
         for tree_file_name in trees_to_parse:
-            news_id = util.get_root_id(tree_file_name)
+            news_id = util.get_root_id_int(tree_file_name)
             label = labels[news_id]
             if (not self.only_binary) or (label in ['false', 'true']):
                 ## MODIFICATIONS ## add sources, destinations
