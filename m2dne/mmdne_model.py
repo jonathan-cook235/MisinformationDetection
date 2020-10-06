@@ -277,14 +277,14 @@ class MMDNE(nn.Module):
 
         ## Compute the error of timstamp prediction
         estimate_timestamp = self.timestamp_predict(intensity=p_lambdas)
-        timestamp_loss = self.MSE_criterion(torch.exp(estimate_timestamp), torch.exp(event_time))
+        timestamp_loss = self.MSE_criterion(torch.exp(estimate_timestamp), torch.exp(Variable(event_time).to(self.device)))
 
         return local_loss, timestamp_loss
 
     def global_loss(self,s_nodes, t_nodes, event_time, delta_e_true, node_sum,news_id):
         delta_e_pred = self.global_forward(s_nodes, t_nodes, event_time, node_sum,news_id)
 
-        global_loss = self.MSE_criterion(torch.log(delta_e_pred + 1e-5), torch.log(delta_e_true))
+        global_loss = self.MSE_criterion(torch.log(delta_e_pred + 1e-5), torch.log(Variable(delta_e_true).to(self.device)+1e-5))
         # loss = ((delta_e_pred - Variable(delta_e_true))**2).mean(dim=-1)
         if torch.isnan(global_loss):
             print('delta_e_pred',delta_e_pred, 'delta_e_true',delta_e_true,
