@@ -101,7 +101,7 @@ class MMDNE(nn.Module):
         # p – probability of an element to be zeroed
         self.dropout_layer = nn.Dropout(self.dropout)
         self.leakyrelu = torch.nn.LeakyReLU(0.2)  # alpha =0.2 for leakyrelu
-        # self.W, self.att_param,
+
         self.para_to_opt = [self.delta_s, self.delta_t, self.zeta,self.gamma,self.theta, self.a] \
                            + list(self.fts2emb.parameters()) \
                            + list(self.bilinear.parameters()) \
