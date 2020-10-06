@@ -345,7 +345,7 @@ if __name__ == '__main__':
     if args.optimizer == 'SGD':
         optim = SGD(lr=args.learning_rate, momentum=0.9, weight_decay=0.01, params=mmdne.para_to_opt)
     elif args.optimizer == 'Adam':
-        optim = Adam(lr=args.learning_rate, weight_decay=0.1, params=mmdne.para_to_opt)#0.01
+        optim = Adam(lr=args.learning_rate, weight_decay=0.05, params=mmdne.para_to_opt)#0.01
 
 
     if args.train_mode == 'True':
