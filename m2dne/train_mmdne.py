@@ -57,7 +57,7 @@ parser.add_argument('--time_cutoff',
 parser.add_argument('--seed', default=64, type=int,
                     help='Seed for train/val/test split')
 parser.add_argument('--patience', type=int, default=3, help='Patience for early stopping')
-parser.add_argument('--dropout', type=float, default=0.5, help='Dropout probability')
+parser.add_argument('--dropout', type=float, default=0.3, help='Dropout probability')
 parser.add_argument('--epsilon', type=float, default=10, help='veracity loss co-efficient')
 parser.add_argument('--epsilon1', type=float, default=1, help='local loss co-efficient')
 parser.add_argument('--epsilon2', type=float, default=0.1, help='global loss co-efficient')
