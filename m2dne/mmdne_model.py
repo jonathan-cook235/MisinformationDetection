@@ -192,25 +192,6 @@ class MMDNE(nn.Module):
         att_s_his_s = softmax(sim_s_s_his, dim=1)  # (batch, h)
         # att_t_his_t = softmax(sim_t_t_his, dim=1)  # (batch, h)
 
-        # s_his_hat_emb_inter = ((att_s_his_s * Variable(s_h_time_mask)).unsqueeze(2) *
-        #                        torch.mm(s_h_node_emb.view(s_h_node_emb.size()[0] * self.hist_len, -1), self.W).
-        #                        view(s_h_node_emb.size()[0],self.hist_len,-1)).sum(dim=1)  # (b,dim)
-        # t_his_hat_emb_inter = ((att_t_his_t * Variable(t_h_time_mask)).unsqueeze(2) *
-        #                        torch.mm(t_h_node_emb.view(t_h_node_emb.size()[0] * self.hist_len, -1), self.W).
-        #                        view(t_h_node_emb.size()[0],self.hist_len,-1)).sum(dim=1)
-        #
-        # temporal-self-attention
-        # remove the history of t_node, i.e., remove it from global_att
-        # global attention is for s-hist and t-hist
-        # global_att = softmax(torch.tanh(self.global_att_linear_layer(torch.transpose(
-        #     torch.cat([(s_his_hat_emb_inter * torch.exp(-delta_s * Variable(d_time_s.mean(dim=1)).unsqueeze(1))).unsqueeze(2),
-        #                (t_his_hat_emb_inter * torch.exp(-delta_t * Variable(d_time_t.mean(dim=1)).unsqueeze(1))).unsqueeze(2)],
-        #               dim=2),dim0=1,dim1=2))),dim=1).squeeze(2)  # (dim, 2)
-        # global_att_s = global_att[:, 0]
-        # global_att_t = global_att[:, 1]
-        # self.global_attention = global_att
-
-
         ## Compute the intensity lambda of positive (truely occurred) events
         # p_mu = self.softplus(self.bilinear(s_node_emb, t_node_emb).squeeze(-1))
         # p_alpha_s = self.softplus(self.bilinear(s_h_node_emb, t_node_emb.unsqueeze(1).repeat(1, self.hist_len, 1)).squeeze(-1))# batch-size, hist-len, emb-size
