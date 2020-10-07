@@ -62,12 +62,12 @@ parser.add_argument('--patience', type=int, default=3, help='Patience for early 
 parser.add_argument('--dropout', type=float, default=0.1, help='Dropout probability')
 parser.add_argument('--epsilon', type=float, default=10, help='veracity loss co-efficient')
 parser.add_argument('--epsilon1', type=float, default=1, help='local loss co-efficient')
-parser.add_argument('--epsilon2', type=float, default=0.1, help='global loss co-efficient')
-parser.add_argument('--epsilon3', type=float, default=10, help='timestamp loss co-efficient')
+parser.add_argument('--epsilon2', type=float, default=0, help='global loss co-efficient')#0.1
+parser.add_argument('--epsilon3', type=float, default=0, help='timestamp loss co-efficient')#10
 parser.add_argument('--enable_cuda', type=bool, default=True,
                     help='whether to use gpu')
 parser.add_argument('--gpu', type=int, default=1, help='Idx for the gpu to use')
-parser.add_argument('--backprop_every', type=int, default=10,
+parser.add_argument('--backprop_every', type=int, default=1,
                     help='Every how many batches to backprop')
 args = parser.parse_args()
 print(args)

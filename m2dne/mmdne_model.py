@@ -27,9 +27,9 @@ LType = torch.LongTensor
 class MMDNE(nn.Module):
     def __init__(self, file_path, save_graph_path,model_name,save_model_path,
                  emb_size=32, neg_size=10, hist_len=2, directed=False,
-                 batch_size=1000, epoch_num=1,
-                 only_binary=True,seed=64, backprop_every = 10,
-                 tlp_flag=False, trend_prediction=False,device='cpu',gpu=-1,
+                 batch_size=1000, epoch_num=100,
+                 only_binary=True,seed=64, backprop_every = 1,
+                 tlp_flag=False, trend_prediction=False, device='cpu',gpu=-1,
                  epsilon=1.0, epsilon1=1.0,epsilon2=1.0, epsilon3=1.0, dropout=0.5
     ):
         super(MMDNE, self).__init__()
