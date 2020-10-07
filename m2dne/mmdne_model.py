@@ -224,8 +224,8 @@ class MMDNE(nn.Module):
         s_node_emb = self.get_emb_from_id(s_nodes,news_id,dim_num=2)
         t_node_emb = self.get_emb_from_id(t_nodes,news_id,dim_num=2)
 
-        # beta = torch.sigmoid(self.bilinear(s_node_emb, t_node_emb)).squeeze(-1) # (batch) Equation-11 torch.sigmoid
-        beta  = self.softplus(self.bilinear(s_node_emb, t_node_emb)).squeeze(-1)
+        beta = torch.sigmoid(self.bilinear(s_node_emb, t_node_emb)).squeeze(-1) # (batch) Equation-11 torch.sigmoid
+        # beta  = self.softplus(self.bilinear(s_node_emb, t_node_emb)).squeeze(-1)
         event_time = Variable(event_time).abs().to(self.device)+1e-6
         r_t = beta / torch.pow(event_time, self.theta)
         node_sum = Variable(node_sum).abs().to(self.device)
