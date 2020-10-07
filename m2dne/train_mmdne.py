@@ -46,9 +46,9 @@ parser.add_argument('--emb_size', default=64, type=int,
                     help='embedding_size')
 parser.add_argument('--only_binary', action='store_true',
                     help='Reduces the problem to binary classification')
-parser.add_argument('--neg_size', default=8, type=int,
+parser.add_argument('--neg_size', default=5, type=int,
                     help='negative sample number')
-parser.add_argument('--hist_len', default=3, type=int,
+parser.add_argument('--hist_len', default=5, type=int,
                     help='history node number')
 parser.add_argument('--standardize', action='store_true',
                     help='Standardize features')
