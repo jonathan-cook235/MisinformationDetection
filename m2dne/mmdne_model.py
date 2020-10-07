@@ -355,7 +355,7 @@ class MMDNE(nn.Module):
         weighted_timestamp_loss = self.epsilon3 * timestamp_loss.mean()
         weighted_vera_loss = self.epsilon * vera_loss
 
-        loss = weighted_local_loss + weighted_vera_loss + weighted_global_loss + weighted_timestamp_loss
+        loss = weighted_local_loss + weighted_vera_loss #+ weighted_global_loss + weighted_timestamp_loss
 
         return loss, weighted_local_loss.detach().cpu().numpy(), \
                weighted_global_loss.detach().cpu().numpy(),\
