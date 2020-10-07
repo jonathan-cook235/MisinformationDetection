@@ -169,11 +169,11 @@ class MMDNE(nn.Module):
             d_time_s_i = Variable(d_time_s)[:,i:(i+1)].to(self.device)
             if i == 0:
                 a_input = torch.cat([s_node_emb_i, s_h_node_emb_i],dim=1)  # (b, 2*dim)
-                sim_s_s_his = self.softplus(torch.exp(-delta_s * d_time_s_i) * torch.mm(a_input, self.a))  # (b.dim),leakyrelu
+                sim_s_s_his = self.leakyrelu(torch.exp(-delta_s * d_time_s_i) * torch.mm(a_input, self.a))  # (b.dim),leakyrelu
             else:
                 a_input = torch.cat([s_node_emb_i, s_h_node_emb_i], dim=1)
                 sim_s_s_his = torch.cat([sim_s_s_his,
-                                         self.softplus(torch.exp(-delta_s * d_time_s_i) * torch.mm(a_input, self.a))], dim=1)
+                                         self.leakyrelu(torch.exp(-delta_s * d_time_s_i) * torch.mm(a_input, self.a))], dim=1)
 
         # for i in range(self.hist_len):
         #     t_h_node_emb_i = torch.transpose(t_h_node_emb[:, i:(i + 1), :], dim0=1, dim1=2).squeeze()
@@ -182,12 +182,12 @@ class MMDNE(nn.Module):
         #     if i == 0:
         #         # a_input = torch.cat([torch.mm(t_node_emb_i, self.W), torch.mm(t_h_node_emb_i, self.W)], dim=1)  # (b, 2*dim)
         #         a_input = torch.cat([t_node_emb_i, t_h_node_emb_i], dim=1)
-        #         sim_t_t_his = self.softplus(torch.exp(-delta_t * d_time_t_i) * torch.mm(a_input, self.a))
+        #         sim_t_t_his = self.leakyrelu(torch.exp(-delta_t * d_time_t_i) * torch.mm(a_input, self.a))
         #     else:
         #         # a_input = torch.cat([torch.mm(t_node_emb_i, self.W), torch.mm(t_h_node_emb_i, self.W)], dim=1)
         #         a_input = torch.cat([t_node_emb_i, t_h_node_emb_i], dim=1)
         #         sim_t_t_his = torch.cat([sim_t_t_his,
-        #                                  self.softplus(torch.exp(-delta_t * d_time_t_i) * torch.mm(a_input, self.a))], dim=1)
+        #                                  self.leakyrelu(torch.exp(-delta_t * d_time_t_i) * torch.mm(a_input, self.a))], dim=1)
 
         att_s_his_s = softmax(sim_s_s_his, dim=1)  # (batch, h)
         # att_t_his_t = softmax(sim_t_t_his, dim=1)  # (batch, h)
@@ -212,8 +212,10 @@ class MMDNE(nn.Module):
 
 
         ## Compute the intensity lambda of positive (truely occurred) events
-        p_mu = self.softplus(self.bilinear(s_node_emb, t_node_emb).squeeze(-1))
-        p_alpha_s = self.softplus(self.bilinear(s_h_node_emb, t_node_emb.unsqueeze(1).repeat(1, self.hist_len, 1)).squeeze(-1))# batch-size, hist-len, emb-size
+        # p_mu = self.softplus(self.bilinear(s_node_emb, t_node_emb).squeeze(-1))
+        # p_alpha_s = self.softplus(self.bilinear(s_h_node_emb, t_node_emb.unsqueeze(1).repeat(1, self.hist_len, 1)).squeeze(-1))# batch-size, hist-len, emb-size
+        p_mu = self.bilinear(s_node_emb, t_node_emb).squeeze(-1)
+        p_alpha_s = self.bilinear(s_h_node_emb, t_node_emb.unsqueeze(1).repeat(1, self.hist_len, 1)).squeeze(-1)  # batch-size, hist-len, emb-size
         p_lambda = p_mu + (att_s_his_s * p_alpha_s * torch.exp(delta_s * Variable(d_time_s).to(self.device))
                            * Variable(s_h_time_mask).to(self.device)).sum(dim=1)
 
@@ -221,11 +223,11 @@ class MMDNE(nn.Module):
         s_n_node_emb = self.get_emb_from_id(s_neg_node,news_id, dim_num=3, dim_size=self.neg_size)
         t_n_node_emb = self.get_emb_from_id(t_neg_node,news_id, dim_num=3, dim_size=self.neg_size)
 
-        n_mu_s = self.softplus(self.bilinear(s_node_emb.unsqueeze(1).repeat(1, self.neg_size, 1), t_n_node_emb).squeeze(-1))  # (batch, neg_len)
+        n_mu_s = self.bilinear(s_node_emb.unsqueeze(1).repeat(1, self.neg_size, 1), t_n_node_emb).squeeze(-1)  # (batch, neg_len)
         # n_mu_t = self.softplus(self.bilinear(t_node_emb.unsqueeze(1).repeat(1, self.neg_size, 1), s_n_node_emb).squeeze(-1))
 
-        n_alpha_s = self.softplus(self.bilinear(s_h_node_emb.unsqueeze(2).repeat(1, 1, self.neg_size, 1),
-                                  t_n_node_emb.unsqueeze(1).repeat(1, self.hist_len, 1, 1)).squeeze(-1))
+        n_alpha_s = self.bilinear(s_h_node_emb.unsqueeze(2).repeat(1, 1, self.neg_size, 1),
+                                  t_n_node_emb.unsqueeze(1).repeat(1, self.hist_len, 1, 1)).squeeze(-1)
         # n_alpha_t = self.softplus(self.bilinear(t_h_node_emb.unsqueeze(2).repeat(1, 1, self.neg_size, 1),
         #                           s_n_node_emb.unsqueeze(1).repeat(1, self.hist_len, 1, 1)).squeeze(-1))
 
@@ -243,7 +245,7 @@ class MMDNE(nn.Module):
 
         # beta = torch.sigmoid(self.bilinear(s_node_emb, t_node_emb)).squeeze(-1) # (batch) Equation-11 torch.sigmoid
         beta  = self.softplus(self.bilinear(s_node_emb, t_node_emb)).squeeze(-1)
-        event_time = Variable(event_time).abs().to(self.device)+1e-5
+        event_time = Variable(event_time).abs().to(self.device)+1e-6
         r_t = beta / torch.pow(event_time, self.theta)
         node_sum = Variable(node_sum).abs().to(self.device)
         # delta_e_pred must be non-negative; node_sum-1
@@ -270,9 +272,9 @@ class MMDNE(nn.Module):
                                                                  neg_s_node, neg_t_node,news_id)
 
         ## Compute the Negative Log-Likelihood as Equation 14 in MMDNE
-        aaa  =  - torch.log(p_lambdas.sigmoid() + 1e-5)
-        bbb = - torch.log(n_lambdas_s.neg().sigmoid() + 1e-5).sum(dim=1)
-        # ccc = - torch.log(n_lambdas_t.neg().sigmoid() + 1e-5).sum(dim=1)
+        aaa  =  - torch.log(p_lambdas.sigmoid() + 1e-6)
+        bbb = - torch.log(n_lambdas_s.neg().sigmoid() + 1e-6).sum(dim=1)
+        # ccc = - torch.log(n_lambdas_t.neg().sigmoid() + 1e-6).sum(dim=1)
         local_loss =  aaa + bbb #+ ccc # remove the history of t_node, i.e., ccc
 
         ## Compute the error of timstamp prediction
@@ -284,12 +286,12 @@ class MMDNE(nn.Module):
     def global_loss(self,s_nodes, t_nodes, event_time, delta_e_true, node_sum,news_id):
         delta_e_pred = self.global_forward(s_nodes, t_nodes, event_time, node_sum,news_id)
 
-        global_loss = self.MSE_criterion(torch.log(delta_e_pred + 1e-5), torch.log(Variable(delta_e_true).to(self.device)+1e-5))
+        global_loss = self.MSE_criterion(torch.log(delta_e_pred + 1e-6), torch.log(Variable(delta_e_true).to(self.device)+1e-6))
         # loss = ((delta_e_pred - Variable(delta_e_true))**2).mean(dim=-1)
         if torch.isnan(global_loss):
             print('delta_e_pred',delta_e_pred, 'delta_e_true',delta_e_true,
-                  'torch.log(delta_e_pred + 1e-5)',torch.log(delta_e_pred + 1e-5),
-                  'torch.log(Variable(delta_e_true) + 1e-5)',torch.log(Variable(delta_e_true).to(self.device) + 1e-5),
+                  'torch.log(delta_e_pred + 1e-6)',torch.log(delta_e_pred + 1e-6),
+                  'torch.log(Variable(delta_e_true) + 1e-6)',torch.log(Variable(delta_e_true).to(self.device) + 1e-6),
                   'loss',global_loss)
             assert (not torch.isnan(global_loss))
         return global_loss, delta_e_pred
