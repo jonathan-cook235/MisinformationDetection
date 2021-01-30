@@ -16,3 +16,5 @@ Data preparation is performed within the files utils.py, text_preprocessing.py a
 'train.py' is the training script for our model.
 
 The files 'Week # Model Implementation.ipynb' provide code breakdowns for my supervisory research partner Qiang Zhang (UCL Centre for Artificial Intelligence).
+
+'mm2dne' contains the codes of the temporal point process-based dynamic graph model that is used for misinformation experiments.
