@@ -13,8 +13,8 @@ Data preparation is performed within the files utils.py, text_preprocessing.py a
 ## Scripts
 'encoder_decoder.py' combines the encoder and decoder. This architecture is explained here: https://nlp.seas.harvard.edu/2018/04/03/attention.html. A temporal graph sum constructs the encoder, creating a set of node embeddings. This method is from the paper 'Temporal Graph Networks for Deep Learning on Dynamic Graphs'. The veracity prediction task requires performing graph learning on the final state of the dynamic graph to make a prediction on the veracity of the source claim. This method is from the paper 'GCAN: Graph Aware Co-Attention Networks for Explainable Fake News Detection on Social Media'.
 
-'train.py' is the training script for our model.
+'train_gnn.py' is the training script for our model.
 
 The files 'Week # Model Implementation.ipynb' provide code breakdowns for my supervisory research partner Qiang Zhang (UCL Centre for Artificial Intelligence).
 
-'mm2dne' contains the codes of the temporal point process-based dynamic graph model that is used for misinformation experiments.
+'m2dne' contains the codes of the temporal point process-based dynamic graph model that is used for misinformation experiments.
